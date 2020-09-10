@@ -57,20 +57,18 @@ function mineBlockAtTime(timestamp) {
 const DURATION = 7 * 24 * 60 * 60;
 const MAX_NUM_BOOSTERS = 5;
 const USDT_CAP_AMOUNT = (10000 * 10 ** 6).valueOf();
-const WBTC_CAP_AMOUNT = (1 * 10 ** 8).valueOf();
-const REWARD_AMOUNT = web3.utils.toWei('4000');
+const REWARD_AMOUNT = web3.utils.toWei('6048');
 const MAX_UINT256 = new BN(2).pow(new BN(256)).sub(new BN(1));
 let START_TIME;
 
-contract('BoostRewardsPool', ([governance, minter, alice]) => {
-  before('init tokens and pools', async () => {
+contract('BoostRewardsPool', ([governance, minter, alice, bob]) => {
+  beforeEach('init tokens and pools', async () => {
     // Set pool start time one day after
     START_TIME = await getCurrentBlockTime() + (24 * 60 * 60);
 
     // Setup tokens
     this.boost = await BoostToken.new({from: governance});
     this.usdt = await TestToken.new('Tether USDT', 'USDT', '6', {from: governance});
-    this.wbtc = await TestToken.new('Wrapped Bitcoin', 'WBTC', '8', {from: governance});
     this.ycrv = await TestToken.new('Curve.fi yDAI/yUSDC/yUSDT/yTUSD', 'yDAI+yUSDC+yUSDT+yTUSD', '18', {
       from: governance,
     });
@@ -124,29 +122,19 @@ contract('BoostRewardsPool', ([governance, minter, alice]) => {
       }
     );
     await this.boost.transfer(this.usdtPool.address, REWARD_AMOUNT, {from: governance});
-    this.wbtcPool = await BoostRewardsPool.new(
-      WBTC_CAP_AMOUNT,
-      this.wbtc.address,
-      this.boost.address,
-      governance,
-      this.uniswapV2Router.address,
-      START_TIME,
-      DURATION,
-      {
-        from: governance,
-      }
-    );
-    await this.boost.transfer(this.wbtcPool.address, REWARD_AMOUNT, {from: governance});
 
     // Set balances and approvals
-    await this.weth.deposit({value: web3.utils.toWei('100'), from: governance});
+    await this.weth.deposit({value: web3.utils.toWei('200'), from: governance});
+
+    // alice
     await this.usdt.transfer(alice, 100000 * 10 ** 6, {from: governance});
-    await this.wbtc.transfer(alice, 1000 * 10 ** 8, {from: governance});
-    await this.weth.transfer(alice, web3.utils.toWei('100'), {from: governance});
     await this.usdt.approve(this.usdtPool.address, MAX_UINT256, {from: alice});
-    await this.wbtc.approve(this.wbtcPool.address, MAX_UINT256, {from: alice});
     await this.boost.approve(this.usdtPool.address, MAX_UINT256, {from: alice});
-    await this.boost.approve(this.wbtcPool.address, MAX_UINT256, {from: alice});
+
+    // bob
+    await this.usdt.transfer(bob, 100000 * 10 ** 6, {from: governance});
+    await this.usdt.approve(this.usdtPool.address, MAX_UINT256, {from: bob});
+    await this.boost.approve(this.usdtPool.address, MAX_UINT256, {from: bob});
 
     // Deploy governance but don't set yet
     this.gov = await BoostGov.new(this.boost.address, this.ycrv.address, this.uniswapV2Router.address, {
@@ -163,13 +151,6 @@ contract('BoostRewardsPool', ([governance, minter, alice]) => {
     assert.equal(await this.usdtPool.duration(), DURATION);
     assert.equal(await this.usdtPool.starttime(), START_TIME);
 
-    // WBTC pool
-    assert.equal(await this.wbtcPool.boostToken(), this.boost.address);
-    assert.equal(await this.wbtcPool.uniswapRouter(), this.uniswapV2Router.address);
-    assert.equal(await this.wbtcPool.tokenCapAmount(), WBTC_CAP_AMOUNT);
-    assert.equal(await this.wbtcPool.MAX_NUM_BOOSTERS(), MAX_NUM_BOOSTERS);
-    assert.equal(await this.wbtcPool.duration(), DURATION);
-    assert.equal(await this.wbtcPool.starttime(), START_TIME);
   });
 
   it('should set the rewards per pool', async () => {
@@ -178,31 +159,27 @@ contract('BoostRewardsPool', ([governance, minter, alice]) => {
     assert.equal(await this.usdtPool.lastUpdateTime(), START_TIME);
     assert.equal(await this.usdtPool.periodFinish(), START_TIME + DURATION);
 
-    await this.wbtcPool.notifyRewardAmount(REWARD_AMOUNT, {from: governance});
-    assert.equal((await this.wbtcPool.rewardRate()).valueOf(), REWARD_AMOUNT / DURATION - 1);
-    assert.equal(await this.wbtcPool.lastUpdateTime(), START_TIME);
-    assert.equal(await this.wbtcPool.periodFinish(), START_TIME + DURATION);
   });
 
   it('should test renouncing governanceship per pool', async () => {
     await this.usdtPool.renounceOwnership({from: governance});
     assert.equal(await this.usdtPool.governance(), constants.ZERO_ADDRESS);
 
-    await this.wbtcPool.renounceOwnership({from: governance});
-    assert.equal(await this.wbtcPool.governance(), constants.ZERO_ADDRESS);
   });
 
   it('should revert relevant functions if pool has not started yet', async () => {
     await expectRevert(this.usdtPool.stake(1000 * 10 ** 6, {from: alice}), 'not start');
-    await expectRevert(this.wbtcPool.stake(0.1 * 10 ** 8, {from: alice}), 'not start');
     await expectRevert(this.usdtPool.getReward({from: alice}), 'not start');
-    await expectRevert(this.wbtcPool.getReward({from: alice}), 'not start');
     await expectRevert(this.usdtPool.boost({from: alice}), 'not start');
-    await expectRevert(this.wbtcPool.boost({from: alice}), 'not start');
     await expectRevert(this.usdtPool.withdraw(1, {from: alice}), 'not start');
-    await expectRevert(this.wbtcPool.withdraw(1, {from: alice}), 'not start');
     await expectRevert(this.usdtPool.exit({from: alice}), 'not start');
-    await expectRevert(this.wbtcPool.exit({from: alice}), 'not start');
+  });
+
+  it('should successfully set governance', async () => {
+    await this.usdtPool.setGovernance(this.gov.address, {from: governance});
+
+    assert.equal(await this.usdtPool.governanceSetter(), constants.ZERO_ADDRESS);
+    assert.equal(await this.usdtPool.stablecoin(), this.ycrv.address);
   });
 
   it('should test staking at a pool', async () => {
@@ -211,116 +188,182 @@ contract('BoostRewardsPool', ([governance, minter, alice]) => {
 
     await this.usdtPool.stake(1000 * 10 ** 6, {from: alice});
     assert.equal(await this.usdtPool.balanceOf(alice), 1000 * 10 ** 6);
-    await this.wbtcPool.stake(0.5 * 10 ** 8, {from: alice});
-    assert.equal(await this.wbtcPool.balanceOf(alice), 0.5 * 10 ** 8);
   });
 
-  it('should revert staking at a pool with amount exceeding token  within first 24hours', async () => {
-    await expectRevert(this.usdtPool.stake(20000 * 10 ** 6, {from: alice}), 'token cap exceeded');
-    await expectRevert(this.wbtcPool.stake(2 * 10 ** 8, {from: alice}), 'token cap exceeded');
+  it('should revert staking at a pool with amount exceeding token within first 24hours', async () => {
+    await mineBlockAtTime(START_TIME);
+
+    await expectRevert(this.usdtPool.stake(USDT_CAP_AMOUNT + 1, {from: alice}), 'token cap exceeded');
   });
 
-  it('should revert staking at a pool with amount exceeding token cap', async () => {
+  it('should not revert staking at a pool with amount exceeding token cap after first 24hours', async () => {
     // Mine block and move timestamp to beyond 24hour token cap
     await mineBlockAtTime(START_TIME + 86400);
 
-    await this.usdtPool.stake(20000 * 10 ** 6, {from: alice});
-    assert.equal(await this.usdtPool.balanceOf(alice), 21000 * 10 ** 6);
-    await this.wbtcPool.stake(2 * 10 ** 8, {from: alice});
-    assert.equal(await this.wbtcPool.balanceOf(alice), 2.5 * 10 ** 8);
+    await this.usdtPool.stake(USDT_CAP_AMOUNT + 1, {from: alice});
+    assert.equal(await this.usdtPool.balanceOf(alice), USDT_CAP_AMOUNT + 1);
   });
 
-  it('should test getting rewards from a pool', async () => {
-    // Mine 1000 blocks
-    mineBlocks(1000);
+  it('should test alice taking 100% of the usdtPool rewards', async () => {
+    // buidler evm can only mine 1 transaction per block and increases
+    // block.timestamp by 1 second on every transaction, so we will
+    // offset the start start by 2 seconds, so the first stake will be
+    // exactly the same at START_TIIME
+    await mineBlockAtTime(START_TIME - 2);
 
+    await this.usdtPool.notifyRewardAmount(REWARD_AMOUNT, {from: governance});
+
+    await this.usdtPool.stake(1, {from: alice})
+
+    // Mine 1 week worth of blocks
+    await mineBlockAtTime(START_TIME + DURATION);
+    
     await this.usdtPool.getReward({from: alice});
-    await this.wbtcPool.getReward({from: alice});
 
-    assert((await this.boost.balanceOf(alice)).should.be.a.bignumber.that.is.greaterThan('0'));
+    const aliceBalance = await this.boost.balanceOf(alice)
+
+    assert.equal(aliceBalance, REWARD_AMOUNT)
+  });
+
+  it('should test alice taking 75% and bob taking 25% of the rewards', async () => {
+    // buidler evm can only mine 1 transaction per block and increases
+    // block.timestamp by 1 second on every transaction, so we will
+    // offset the start start by 2 seconds, so the first stake will be
+    // exactly the same at START_TIIME
+    await mineBlockAtTime(START_TIME - 2);
+
+    await this.usdtPool.notifyRewardAmount(REWARD_AMOUNT, {from: governance});
+
+    await this.usdtPool.stake(1, {from: alice})
+
+    await mineBlockAtTime(START_TIME - 1 + DURATION / 2);
+
+    await this.usdtPool.stake(1, {from: bob})
+
+    // Mine 1 week worth of blocks
+    await mineBlockAtTime(START_TIME + DURATION);
+    
+    await this.usdtPool.getReward({from: alice});
+
+    const aliceBalance = await this.boost.balanceOf(alice)
+
+    await this.usdtPool.getReward({from: bob});
+
+    const bobBalance = await this.boost.balanceOf(bob)
+
+    assert.equal(aliceBalance, REWARD_AMOUNT * 0.75)
+    assert.equal(bobBalance, REWARD_AMOUNT * 0.25)
   });
 
   it('should revert purchasing yield boosters before intended start time', async () => {
+    await mineBlockAtTime(START_TIME);
+
+    await this.usdtPool.notifyRewardAmount(REWARD_AMOUNT, {from: governance});
+
     await expectRevert(this.usdtPool.boost({from: alice}), 'early boost purchase');
-    await expectRevert(this.wbtcPool.boost({from: alice}), 'early boost purchase');
   });
 
-  it('should successfully purchase yield boosters', async () => {
+  it('should successfully purchase yield boosters and increase booster price by 5%', async () => {
+    await mineBlockAtTime(START_TIME)
+
+    await this.usdtPool.notifyRewardAmount(REWARD_AMOUNT, {from: governance});
+
     // Mine block and move timestamp to beyond 2 days
     await mineBlockAtTime(START_TIME + 172800);
 
+    await this.usdtPool.stake(1, {from: alice})
+
+    await this.boost.transfer(alice, web3.utils.toWei('1'), {from: governance});
+
     await this.usdtPool.boost({from: alice});
-    await this.wbtcPool.boost({from: alice});
 
     const boosterPriceUSDT = await this.usdtPool.boosterPrice();
-    const boosterPriceWBTC = await this.wbtcPool.boosterPrice();
+
     const boostersBoughtUSDT = await this.usdtPool.numBoostersBought(alice);
-    const boostersBoughtWBTC = await this.wbtcPool.numBoostersBought(alice);
 
     assert.equal(boosterPriceUSDT, 1 * 10 ** 18 * 1.05);
-    assert.equal(boosterPriceWBTC, 1 * 10 ** 18 * 1.05);
     assert.equal(boostersBoughtUSDT, 1);
-    assert.equal(boostersBoughtWBTC, 1);
-  });
-
-  it('should successfully set governance', async () => {
-    await this.usdtPool.setGovernance(this.gov.address, {from: governance});
-    await this.wbtcPool.setGovernance(this.gov.address, {from: governance});
-
-    assert.equal(await this.usdtPool.governanceSetter(), constants.ZERO_ADDRESS);
-    assert.equal(await this.wbtcPool.governanceSetter(), constants.ZERO_ADDRESS);
-    assert.equal(await this.usdtPool.stablecoin(), this.ycrv.address);
-    assert.equal(await this.wbtcPool.stablecoin(), this.ycrv.address);
   });
 
   it('should successfully purchase yield boosters, sending half of BOOST to Boost Governance', async () => {
-    // Mine block and move timestamp to 1 hour
-    await mineBlockAtTime((await getCurrentBlockTime()) + 3600);
+    await mineBlockAtTime(START_TIME)
+
+    await this.usdtPool.setGovernance(this.gov.address, {from: governance});
+
+    // Mine block and move timestamp to beyond 2 days
+    await mineBlockAtTime(START_TIME + 172800);
+
+    await this.boost.transfer(alice, web3.utils.toWei('1'), {from: governance});
 
     await this.usdtPool.boost({from: alice});
-    await this.wbtcPool.boost({from: alice});
 
-    assert((await this.ycrv.balanceOf(this.gov.address)).should.be.a.bignumber.that.is.greaterThan('0'));
+    const stableBalance = await this.ycrv.balanceOf(this.gov.address)
+
+    assert(stableBalance.should.be.a.bignumber.that.equals('496955027903342393'));
   });
 
-  it('should revert purchasing yield boosters consecutively within an hour', async () => {
-    // Mine block and move timestamp to 1 hour
-    await mineBlockAtTime((await getCurrentBlockTime()) + 3600);
+  it('should allow buying boosters 1 hour after buying first one', async () => {
+    await mineBlockAtTime(START_TIME)
+
+    await this.usdtPool.notifyRewardAmount(REWARD_AMOUNT, {from: governance});
+
+    // Mine block and move timestamp to beyond 2 days
+    await mineBlockAtTime(START_TIME + 172800);
+
+    await this.usdtPool.stake(1, {from: alice})
+
+    await this.boost.transfer(alice, web3.utils.toWei('3'), {from: governance});
 
     await this.usdtPool.boost({from: alice});
-    await this.wbtcPool.boost({from: alice});
+
     await expectRevert(this.usdtPool.boost({from: alice}), 'early boost purchase');
-    await expectRevert(this.wbtcPool.boost({from: alice}), 'early boost purchase');
-  });
+
+    // Mine block and move timestamp to 1 hour
+    await mineBlockAtTime((await getCurrentBlockTime()) + 3600);
+
+    await this.usdtPool.boost({from: alice});
+  })
 
   it('should revert purchasing more than the max num allowed of boosters', async () => {
-    for (let i = 3; i < MAX_NUM_BOOSTERS; i++) {
+    await mineBlockAtTime(START_TIME)
+
+    // Mine block and move timestamp to beyond 2 days
+    await mineBlockAtTime(START_TIME + 172800);
+
+    await this.usdtPool.stake(1, {from: alice})
+
+    await this.boost.transfer(alice, web3.utils.toWei('10'), {from: governance});
+
+    for (let i = 0; i < MAX_NUM_BOOSTERS; i++) {
       await mineBlockAtTime((await getCurrentBlockTime()) + 3600);
       await this.usdtPool.boost({from: alice});
-      await this.wbtcPool.boost({from: alice});
     }
 
     await mineBlockAtTime((await getCurrentBlockTime()) + 3600);
     await expectRevert(this.usdtPool.boost({from: alice}), 'max boosters bought');
-    await expectRevert(this.wbtcPool.boost({from: alice}), 'max boosters bought');
   });
 
   it('should test withdrawing from a pool', async () => {
+    await mineBlockAtTime(START_TIME)
+
+    await this.usdtPool.stake(1, {from: alice})
+
     const balanceUSDT = await this.usdt.balanceOf(alice);
-    const balanceWBTC = await this.wbtc.balanceOf(alice);
 
-    await this.usdtPool.withdraw((10 * 10 ** 6).valueOf(), {from: alice});
-    await this.wbtcPool.withdraw((0.1 * 10 ** 8).valueOf(), {from: alice});
+    await this.usdtPool.withdraw(1, {from: alice});
 
-    assert.equal((await this.usdt.balanceOf(alice)).toString(), balanceUSDT.add(new BN(10 * 10 ** 6)));
-    assert.equal((await this.wbtc.balanceOf(alice)).toString(), balanceWBTC.add(new BN(0.1 * 10 ** 8)));
+    assert.equal((await this.usdt.balanceOf(alice)).toString(), balanceUSDT.addn(1));
   });
 
   it('should test exiting a pool', async () => {
+    await mineBlockAtTime(START_TIME)
+
+    await this.usdtPool.stake(1, {from: alice})
+
+    assert.equal(await this.usdtPool.balanceOf(alice), 1);
+
     await this.usdtPool.exit({from: alice});
-    await this.wbtcPool.exit({from: alice});
 
     assert.equal(await this.usdtPool.balanceOf(alice), 0);
-    assert.equal(await this.wbtcPool.balanceOf(alice), 0);
   });
 });
