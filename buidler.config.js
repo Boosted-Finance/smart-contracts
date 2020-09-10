@@ -1,6 +1,7 @@
 usePlugin("@nomiclabs/buidler-truffle5");
 usePlugin("@nomiclabs/buidler-web3");
 usePlugin("@nomiclabs/buidler-etherscan");
+usePlugin("solidity-coverage");
 
 require('./scripts/defiPools');
 require('./scripts/internalPoolGov');
@@ -18,6 +19,9 @@ module.exports = {
       url: `https://mainnet.infura.io/v3/${process.env.INFURA_API_KEY}`,
       accounts: [process.env.PRIVATE_KEY],
       timeout: 20000
+    },
+    coverage: {
+      url: 'http://localhost:8555'
     }
   },
   solc: {
