@@ -4,5 +4,5 @@ import "../IERC20.sol";
 
 
 interface IVaultRewards {
-    function token() external view returns (IERC20);
+    function want() external view returns (IERC20);
 }

@@ -27,6 +27,7 @@ import "./SafeMath.sol";
 import "./zeppelin/SafeERC20.sol";
 import "./zeppelin/Ownable.sol";
 import "./IERC20.sol";
+import "./IERC20Burnable.sol";
 import "./ITreasury.sol";
 import "./ISwapRouter.sol";
 
@@ -36,6 +37,7 @@ contract TreasuryV2 is Ownable, ITreasury {
     using SafeERC20 for IERC20;
 
     IERC20 public defaultToken;
+    IERC20 public boostToken;
     SwapRouter public swapRouter;
     address public ecoFund;
     address public gov;
@@ -45,13 +47,15 @@ contract TreasuryV2 is Ownable, ITreasury {
 
     // 1% = 100
     uint256 public constant MAX_FUND_PERCENTAGE = 1500; // 15%
-    uint256 public constant PERCENTAGE_PRECISION = 10000; // 100%
+    uint256 public constant DENOM = 10000; // 100%
     uint256 public fundPercentage = 500; // 5%
+    uint256 public burnPercentage = 2500; // 25%
     
     
-    constructor(SwapRouter _swapRouter, IERC20 _defaultToken, address _ecoFund) public {
+    constructor(SwapRouter _swapRouter, IERC20 _defaultToken, IERC20 _boostToken, address _ecoFund) public {
         swapRouter = _swapRouter;
         defaultToken = _defaultToken;
+        boostToken = _boostToken;
         ecoFund = _ecoFund;
         govSetter = msg.sender;
     }
@@ -75,6 +79,11 @@ contract TreasuryV2 is Ownable, ITreasury {
         fundPercentage = _fundPercentage;
     }
 
+    function setBurnPercentage(uint256 _burnPercentage) external onlyOwner {
+        require(_burnPercentage <= DENOM, "exceed max percent");
+        burnPercentage = _burnPercentage;
+    }
+
     function balanceOf(IERC20 token) public view returns (uint256) {
         return token.balanceOf(address(this)).sub(ecoFundAmts[address(token)]);
     }
@@ -83,7 +92,7 @@ contract TreasuryV2 is Ownable, ITreasury {
         token.safeTransferFrom(msg.sender, address(this), amount);
         // portion allocated to ecoFund
         ecoFundAmts[address(token)] = ecoFundAmts[address(token)]
-            .add(amount.mul(fundPercentage).div(PERCENTAGE_PRECISION));
+            .add(amount.mul(fundPercentage).div(DENOM));
     }
 
     // only default token withdrawals allowed
@@ -94,11 +103,13 @@ contract TreasuryV2 is Ownable, ITreasury {
     }
 
     function convertToDefaultToken(address[] calldata routeDetails, uint256 amount) external {
+        require(routeDetails[0] != address(boostToken), "src can't be boost");
         require(routeDetails[0] != address(defaultToken), "src can't be defaultToken");
         require(routeDetails[routeDetails.length - 1] == address(defaultToken), "dest not defaultToken");
         IERC20 srcToken = IERC20(routeDetails[0]);
         require(balanceOf(srcToken) >= amount, "insufficient funds");
         if (srcToken.allowance(address(this), address(swapRouter)) <= amount) {
+            srcToken.safeApprove(address(swapRouter), 0);
             srcToken.safeApprove(address(swapRouter), uint256(-1));
         }
         swapRouter.swapExactTokensForTokens(
@@ -108,6 +119,38 @@ contract TreasuryV2 is Ownable, ITreasury {
             address(this),
             block.timestamp + 100
         );
+    }
+
+    function convertToBoostToken(address[] calldata routeDetails, uint256 amount) external {
+        require(routeDetails[0] != address(boostToken), "src can't be boost");
+        require(routeDetails[0] != address(defaultToken), "src can't be defaultToken");
+        require(routeDetails[routeDetails.length - 1] == address(boostToken), "dest not boostToken");
+        IERC20 srcToken = IERC20(routeDetails[0]);
+        require(balanceOf(srcToken) >= amount, "insufficient funds");
+        if (srcToken.allowance(address(this), address(swapRouter)) <= amount) {
+            srcToken.safeApprove(address(swapRouter), 0);
+            srcToken.safeApprove(address(swapRouter), uint256(-1));
+        }
+        swapRouter.swapExactTokensForTokens(
+            amount,
+            0,
+            routeDetails,
+            address(this),
+            block.timestamp + 100
+        );
+    }
+
+    function rewardVoters() external {
+        IERC20Burnable burnableBoostToken = IERC20Burnable(address(boostToken));
+
+        // burn boost
+        uint256 boostBalance = balanceOf(boostToken);
+        uint256 burnAmount = boostBalance.div(4);
+        burnableBoostToken.burn(burnAmount);
+        boostBalance = boostBalance.sub(burnAmount);
+
+        // TODO: send rest of boost tokens to gov
+        // TODO: call rewardDistribution on gov
     }
 
     function withdrawEcoFund(IERC20 token, uint256 amount) external {

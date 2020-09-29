@@ -4,6 +4,7 @@ import "../IERC20.sol";
 
 
 interface IVault {
-    function token() external view returns (IERC20);
+    function want() external view returns (IERC20);
     function transferFundsToStrategy(address strategy, uint256 amount) external;
+    function availableFunds() external view returns (uint256);
 }

@@ -35,37 +35,37 @@ contract BoostVault is ERC20, ERC20Detailed {
     using Address for address;
     using SafeMath for uint256;
 
-    IERC20 public token;
+    IERC20 public want;
   
     uint256 public maxUtilisation = 9500;
     uint256 public withdrawalFee = 350;
     uint256 public cap;
     uint256 public constant MAX_UTILISATION_ALLOWABLE = 9900; // max 99% utilisation
     uint256 public constant MAX_WITHDRAWAL_FEE = 500; // 5%
-    uint256 public constant MAX = 10000;
+    uint256 public constant DENOM = 10000;
   
     address public gov;
     IController public controller;
 
     constructor(
-        address _token,
+        address _want,
         address _gov,
         IController _controller,
         uint256 _cap
     ) public ERC20Detailed(
-      string(abi.encodePacked("bfVault-", ERC20Detailed(_token).name())),
-      string(abi.encodePacked("bf", ERC20Detailed(_token).symbol())),
-      ERC20Detailed(_token).decimals()
+      string(abi.encodePacked("bfVault-", ERC20Detailed(_want).name())),
+      string(abi.encodePacked("bf", ERC20Detailed(_want).symbol())),
+      ERC20Detailed(_want).decimals()
   ) {
-      token = IERC20(_token);
+      want = IERC20(_want);
       gov = _gov;
       controller = _controller;
       cap = _cap;
   }
   
     function balance() public view returns (uint256) {
-        return token.balanceOf(address(this))
-            .add(controller.balanceOf(address(token)));
+        return want.balanceOf(address(this))
+            .add(controller.balanceOf(address(want)));
     }
   
     function setMaxUtilisation(uint256 _maxUtilisation) external {
@@ -96,7 +96,7 @@ contract BoostVault is ERC20, ERC20Detailed {
 
     // Buffer to process small withdrawals
     function availableFunds() public view returns (uint256) {
-        return token.balanceOf(address(this)).mul(maxUtilisation).div(MAX);
+        return want.balanceOf(address(this)).mul(maxUtilisation).div(DENOM);
     }
   
     // Strategies will request funds from controller
@@ -107,13 +107,13 @@ contract BoostVault is ERC20, ERC20Detailed {
         require(msg.sender == address(controller), "not controller");
         uint256 availAmt = availableFunds();
         require(amount <= availAmt, "too much requested");
-        token.safeTransfer(strategy, amount);
+        want.safeTransfer(strategy, amount);
     }
 
     function deposit(uint256 amount) external {
         uint256 poolAmt = balance();
         require(poolAmt.add(amount) <= cap, "cap exceeded");
-        token.safeTransferFrom(msg.sender, address(this), amount);
+        want.safeTransferFrom(msg.sender, address(this), amount);
         uint256 shares = 0;
         if (poolAmt == 0) {
             shares = amount;
@@ -128,12 +128,12 @@ contract BoostVault is ERC20, ERC20Detailed {
         _burn(msg.sender, shares);
 
         // Check balance
-        uint256 currentAvailFunds = token.balanceOf(address(this));
+        uint256 currentAvailFunds = want.balanceOf(address(this));
         if (currentAvailFunds < requestedAmt) {
             uint256 withdrawDiffAmt = requestedAmt.sub(currentAvailFunds);
             // pull funds from strategies through controller
-            controller.withdraw(address(token), withdrawDiffAmt);
-            uint256 newAvailFunds = token.balanceOf(address(this));
+            controller.withdraw(address(want), withdrawDiffAmt);
+            uint256 newAvailFunds = want.balanceOf(address(this));
             uint256 diff = newAvailFunds.sub(currentAvailFunds);
             if (diff < withdrawDiffAmt) {
                 requestedAmt = newAvailFunds;
@@ -141,13 +141,13 @@ contract BoostVault is ERC20, ERC20Detailed {
         }
 
         // Apply withdrawal fee, transfer and notify rewards pool
-        uint256 withdrawFee = requestedAmt.mul(withdrawalFee).div(MAX);
-        token.safeTransfer(controller.rewards(token), withdrawFee);
+        uint256 withdrawFee = requestedAmt.mul(withdrawalFee).div(DENOM);
+        want.safeTransfer(address(controller.rewards(address(want))), withdrawFee);
 
         // TODO: Call vault rewards notifyRewardDistribution
 
         requestedAmt = requestedAmt.sub(withdrawFee);
-        token.safeTransfer(msg.sender, requestedAmt);
+        want.safeTransfer(msg.sender, requestedAmt);
     }
 
     function getPricePerFullShare() public view returns (uint256) {
