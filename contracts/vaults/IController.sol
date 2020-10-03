@@ -11,7 +11,7 @@ interface IController {
     function balanceOf(address) external view returns (uint256);
     function rewards(address token) external view returns (IVaultRewards);
     function vault(address token) external view returns (IVault);
-    function investedAmounts(address) external view returns (uint256);
+    function allowableAmount(address) external view returns (uint256);
     function treasury() external view returns (ITreasury);
     function approvedStrategies(address, address) external view returns (bool);
     function getHarvestInfo(address strategy, address user)

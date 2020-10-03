@@ -143,8 +143,7 @@ contract BoostVault is ERC20, ERC20Detailed {
         // Apply withdrawal fee, transfer and notify rewards pool
         uint256 withdrawFee = requestedAmt.mul(withdrawalFee).div(DENOM);
         want.safeTransfer(address(controller.rewards(address(want))), withdrawFee);
-
-        // TODO: Call vault rewards notifyRewardDistribution
+        controller.rewards(address(want)).notifyRewardAmount(withdrawFee);
 
         requestedAmt = requestedAmt.sub(withdrawFee);
         want.safeTransfer(msg.sender, requestedAmt);

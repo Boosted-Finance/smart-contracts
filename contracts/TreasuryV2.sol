@@ -29,6 +29,7 @@ import "./zeppelin/Ownable.sol";
 import "./IERC20.sol";
 import "./IERC20Burnable.sol";
 import "./ITreasury.sol";
+import "./IGov.sol";
 import "./ISwapRouter.sol";
 
 
@@ -143,14 +144,15 @@ contract TreasuryV2 is Ownable, ITreasury {
     function rewardVoters() external {
         IERC20Burnable burnableBoostToken = IERC20Burnable(address(boostToken));
 
-        // burn boost
+        // burn boost tokens
         uint256 boostBalance = balanceOf(boostToken);
-        uint256 burnAmount = boostBalance.div(4);
+        uint256 burnAmount = boostBalance.mul(burnPercentage).div(DENOM);
         burnableBoostToken.burn(burnAmount);
         boostBalance = boostBalance.sub(burnAmount);
 
-        // TODO: send rest of boost tokens to gov
-        // TODO: call rewardDistribution on gov
+        // transfer boost tokens to gov, notify reward amount
+        boostToken.safeTransfer(gov, boostBalance);
+        IGov(gov).notifyRewardAmount(boostBalance);
     }
 
     function withdrawEcoFund(IERC20 token, uint256 amount) external {

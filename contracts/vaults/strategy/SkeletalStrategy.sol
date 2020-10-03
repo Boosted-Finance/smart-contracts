@@ -64,7 +64,7 @@ contract SkeletalStrategy is IStrategy {
     // Example: Calc fund availability, then send it all to this contract
     function deposit() public {
         uint256 availFunds = controller.vault(address(want)).availableFunds();
-        availFunds = availFunds.sub(controller.investedAmounts(address(this)));
+        availFunds = Math.min(availFunds, controller.allowableAmount(address(this)));
         controller.earn(address(this), availFunds);
         // TODO: funds would be sent here.. convert to desired token (if needed) for investment
     }
@@ -138,7 +138,7 @@ contract SkeletalStrategy is IStrategy {
         // fee = vault reward amount, reusing variable
         fee = remainingWantAmount.mul(vaultRewardPercentage).div(DENOM);
         want.safeTransfer(address(controller.rewards(address(want))), fee);
-        // devTODO: Call vault rewards notifyRewardDistribution
+        controller.rewards(address(want)).notifyRewardAmount(fee);
         remainingWantAmount = remainingWantAmount.sub(fee);
 
         // TODO: finally, use remaining want amount for reinvestment

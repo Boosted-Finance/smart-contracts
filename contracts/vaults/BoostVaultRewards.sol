@@ -113,17 +113,17 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
             _earned(user, false).add(_earned(user, true));
     }
 
-    function getReward(address user) updateEpochRewards external {
+    function getReward(address user) external updateEpochRewards {
         updateClaimUserRewardAndBooster(user);
     }
 
-    function sendUnclaimedRewards() updateEpochRewards external {
+    function sendUnclaimedRewards() external updateEpochRewards {
         uint256 pendingRewards = unclaimedRewards;
         unclaimedRewards = 0;
         want.safeTransfer(address(controller.vault(address(want))), pendingRewards);
     }
     
-    function boost() updateEpochRewards external {
+    function boost() external updateEpochRewards {
         require(
             block.timestamp > nextBoostPurchaseTime[msg.sender],
             "early boost purchase"
@@ -148,8 +148,8 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     // can only be called by vault (withdrawal fee) or approved strategy
     // since funds are assumed to have been sent
     function notifyRewardAmount(uint256 reward)
-        updateEpochRewards
         external
+        updateEpochRewards
     {
         require(
             msg.sender == address(stakeToken) ||
@@ -198,7 +198,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     }
 
     // stake visibility is public as overriding LPTokenWrapper's stake() function
-    function stake(uint256 amount) updateEpochRewards public {
+    function stake(uint256 amount) public updateEpochRewards {
         require(amount > 0, "Cannot stake 0");
         updateClaimUserRewardAndBooster(msg.sender);
         super.stake(amount);
@@ -211,7 +211,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         stakeToken.safeTransferFrom(msg.sender, address(this), amount);
     }
 
-    function withdraw(uint256 amount) updateEpochRewards public {
+    function withdraw(uint256 amount) public updateEpochRewards {
         require(amount > 0, "Cannot withdraw 0");
         updateClaimUserRewardAndBooster(msg.sender);
         super.withdraw(amount);
@@ -233,7 +233,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         stakeToken.safeTransfer(msg.sender, amount);
     }
 
-    function exit() updateEpochRewards public {
+    function exit() public updateEpochRewards {
         withdraw(balanceOf(msg.sender));
     }
     
