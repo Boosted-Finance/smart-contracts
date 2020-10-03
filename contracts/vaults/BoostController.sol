@@ -38,10 +38,11 @@ contract Controller is IController {
         IVault vault;
         IVaultRewards rewards;
         IStrategy[] strategies;
-        uint256 vaultRewardPercentage;
         uint256 currentHurdleRate;
         uint256 nextHurdleRate;
         uint256 hurdleLastUpdateTime;
+        uint256 harvestPrice;
+        uint256 globalHarvestLastUpdateTime;
         mapping(address => uint256) harvestPercentages;
         mapping(address => uint256) harvestLastUpdateTime;
     }
@@ -63,6 +64,12 @@ contract Controller is IController {
     uint256 internal constant BASE_HARVEST_PERCENTAGE = 50; // 0.5%
     uint256 internal constant BASE_REWARD_PERCENTAGE = 8000; // 80%
     uint256 internal constant HARVEST_PERCENTAGE_MAX = 100; // max 1% extra
+    uint256 internal constant PRICE_INCREASE = 10100; // 1.01x
+    uint256 internal constant EPOCH_PRICE_REDUCTION = 8000; // 0.8x
+
+    uint256 vaultRewardChangePrice = 10e18; // initial cost of 10 boosts
+    uint256 public globalVaultRewardPercentage = BASE_REWARD_PERCENTAGE;
+    uint256 vaultRewardLastUpdateTime;
     
     constructor(
         address _gov,
@@ -75,7 +82,6 @@ contract Controller is IController {
         strategist = _strategist;
         treasury = _treasury;
         boostToken = _boostToken;
-        boostToken.safeApprove(address(treasury), uint256(-1));
         currentEpochTime = _epochStart;
     }
     
@@ -116,16 +122,24 @@ contract Controller is IController {
         uint256 harvestPercentage
     ) {
         address token = IStrategy(strategy).want();
-        vaultRewardPercentage = tokenStratsInfo[token].vaultRewardPercentage;
+        vaultRewardPercentage = globalVaultRewardPercentage;
         hurdleAmount = getHurdleAmount(strategy, token);
         harvestPercentage = getHarvestPercentage(user, token);
     }
 
+    function getHarvestUserInfo(address user, address token)
+        external
+        view
+        returns (uint256 harvestPercentage, uint256 lastUpdateTime)
+    {
+        TokenStratInfo storage info = tokenStratsInfo[token];
+        harvestPercentage = info.harvestPercentages[user];
+        lastUpdateTime = info.harvestLastUpdateTime[user];
+    }
+
     function setTreasury(ITreasury _treasury) external updateEpoch {
         require(msg.sender == gov, "!gov");
-        boostToken.safeApprove(address(treasury), 0);
         treasury = _treasury;
-        boostToken.safeApprove(address(treasury), uint256(-1));
     }
     
     function setStrategist(address _strategist) external updateEpoch {
@@ -145,12 +159,15 @@ contract Controller is IController {
         tokenStratsInfo[token].rewards = _rewards;
     }
     
-    function setVaultAndInitRewardPercentage(IVault _vault) external updateEpoch {
+    function setVaultAndInitHarvestInfo(IVault _vault) external updateEpoch {
         require(msg.sender == strategist || msg.sender == gov, "!authorized");
         address token = address(_vault.want());
-        require(tokenStratsInfo[token].vault == IVault(0), "vault exists");
-        tokenStratsInfo[token].vault = _vault;
-        tokenStratsInfo[token].vaultRewardPercentage = BASE_REWARD_PERCENTAGE;
+        TokenStratInfo storage info = tokenStratsInfo[token];
+        require(info.vault == IVault(0), "vault exists");
+        info.vault = _vault;
+        // initial harvest booster price of 1 boost
+        info.harvestPrice = 1e18;
+        info.globalHarvestLastUpdateTime = currentEpochTime;
     }
     
     function approveStrategy(address _strategy, uint256 _cap) external updateEpoch {
@@ -222,19 +239,36 @@ contract Controller is IController {
         // should send tokens to this contract
         strategy.withdraw(address(token));
         uint256 bal = token.balanceOf(address(this));
+        token.safeApprove(address(treasury), bal);
         // send funds to treasury
         treasury.deposit(token, bal);
     }
 
     function increaseHarvestPercentage(address token) external updateEpoch {
-        // TODO: implement pricing
-        // TODO: send boost tokens to treasury
         TokenStratInfo storage info = tokenStratsInfo[token];
+        // first, handle vault global price and update time
+        // if new epoch, reduce price by 20%
+        if (info.globalHarvestLastUpdateTime < currentEpochTime) {
+            info.harvestPrice = info.harvestPrice.mul(EPOCH_PRICE_REDUCTION).div(DENOM);
+        }
+
+        // get funds from user, send to treasury
+        boostToken.safeTransferFrom(msg.sender, address(this), info.harvestPrice);
+        boostToken.safeApprove(address(treasury), info.harvestPrice);
+        treasury.deposit(boostToken, info.harvestPrice);
+
+        // increase price
+        info.harvestPrice = info.harvestPrice.mul(PRICE_INCREASE).div(DENOM);
+        // update globalHarvestLastUpdateTime
+        info.globalHarvestLastUpdateTime = block.timestamp;
+
+        // next, handle effect on harvest percentage and update user's harvest time
         // see if percentage needs to be reset
         if (info.harvestLastUpdateTime[msg.sender] < currentEpochTime) {
             info.harvestPercentages[msg.sender] = BASE_HARVEST_PERCENTAGE;
         }
         info.harvestLastUpdateTime[msg.sender] = block.timestamp;
+
         // increase harvest percentage by 0.25%
         info.harvestPercentages[msg.sender] = Math.min(
             HARVEST_PERCENTAGE_MAX,
@@ -243,16 +277,25 @@ contract Controller is IController {
         increaseHurdleRate(token);
     }
 
-    function changeVaultRewardPercentage(address token, bool isIncrease) external updateEpoch {
-        // flat cost of 1 boost
-        // TODO: maybe change to increasing price per epoch
-        boostToken.safeTransferFrom(msg.sender, address(this), 1e18);
-        treasury.deposit(boostToken, 1e18);
-        TokenStratInfo storage info = tokenStratsInfo[token];
+    function changeVaultRewardPercentage(bool isIncrease) external updateEpoch {
+        // if new epoch, reduce price by 20%
+        if ((vaultRewardLastUpdateTime != 0) && (vaultRewardLastUpdateTime < currentEpochTime)) {
+            vaultRewardChangePrice = vaultRewardChangePrice.mul(EPOCH_PRICE_REDUCTION).div(DENOM);
+        }
+
+        // get funds from user, send to treasury
+        boostToken.safeTransferFrom(msg.sender, address(this), vaultRewardChangePrice);
+        boostToken.safeApprove(address(treasury), vaultRewardChangePrice);
+        treasury.deposit(boostToken, vaultRewardChangePrice);
+
+        // increase price
+        vaultRewardChangePrice = vaultRewardChangePrice.mul(PRICE_INCREASE).div(DENOM);
+        // update vaultRewardLastUpdateTime
+        vaultRewardLastUpdateTime = block.timestamp;
         if (isIncrease) {
-            info.vaultRewardPercentage = Math.min(DENOM, info.vaultRewardPercentage.add(10));
+            globalVaultRewardPercentage = Math.min(DENOM, globalVaultRewardPercentage.add(25));
         } else {
-            info.vaultRewardPercentage = info.vaultRewardPercentage.sub(10);
+            globalVaultRewardPercentage = globalVaultRewardPercentage.sub(25);
         }
     }
     

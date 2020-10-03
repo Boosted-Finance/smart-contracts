@@ -85,7 +85,6 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         swapRouter = _swapRouter;
         currentEpochTime = controller.currentEpochTime();
         boostToken.safeApprove(address(_swapRouter), uint256(-1));
-        want.safeApprove(address(controller.treasury()), uint256(-1));
     }
 
     modifier updateEpochRewards() {
@@ -142,6 +141,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         boostToken.safeTransferFrom(msg.sender, address(this), boosterAmount);
         
         // transfer boosts to treasury
+        boostToken.safeApprove(address(controller.treasury()), boosterAmount);
         controller.treasury().deposit(boostToken, boosterAmount);
     }
 
@@ -159,6 +159,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
 
         // send treasury fees
         uint256 rewardAmount = reward.mul(TREASURY_FEE).div(DENOM);
+        want.safeApprove(address(controller.treasury()), rewardAmount);
         controller.treasury().deposit(want, rewardAmount);
 
         // distribute remaining fees
