@@ -62,7 +62,7 @@ contract Controller is IController {
     uint256 internal constant DENOM = 10000;
     uint256 internal constant HURDLE_RATE_MAX = 500; // max 5%
     uint256 internal constant BASE_HARVEST_PERCENTAGE = 50; // 0.5%
-    uint256 internal constant BASE_REWARD_PERCENTAGE = 8000; // 80%
+    uint256 internal constant BASE_REWARD_PERCENTAGE = 5000; // 50%
     uint256 internal constant HARVEST_PERCENTAGE_MAX = 100; // max 1% extra
     uint256 internal constant PRICE_INCREASE = 10100; // 1.01x
     uint256 internal constant EPOCH_PRICE_REDUCTION = 8000; // 0.8x
@@ -223,6 +223,7 @@ contract Controller is IController {
 
     /// @dev check that vault has sufficient funds is done by the call to vault
     function earn(address strategy, uint256 amount) public updateEpoch {
+        require(msg.sender == strategy, "!strategy");
         address token = IStrategy(strategy).want();
         require(approvedStrategies[token][strategy], "strat !approved");
         TokenStratInfo storage info = tokenStratsInfo[token];

@@ -25,8 +25,6 @@ pragma solidity 0.5.17;
 
 import "../SafeMath.sol";
 import "../zeppelin/SafeERC20.sol";
-import "../ITreasury.sol";
-import "../ISwapRouter.sol";
 import "./IController.sol";
 import "./IVaultRewards.sol";
 import "../LPTokenWrapper.sol";
@@ -42,7 +40,6 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     IERC20 public boostToken;
     IERC20 public want;
     IController public controller;
-    SwapRouter public swapRouter;
     
     EpochRewards public previousEpoch;
     EpochRewards public currentEpoch;
@@ -77,14 +74,11 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         IERC20 _stakeToken, // bf-token
         IERC20 _boostToken,
         IController _controller,
-        SwapRouter _swapRouter
     ) public LPTokenWrapper(_stakeToken) {
         boostToken = _boostToken;
         want = IVault(address(_stakeToken)).want();
         controller = _controller;
-        swapRouter = _swapRouter;
         currentEpochTime = controller.currentEpochTime();
-        boostToken.safeApprove(address(_swapRouter), uint256(-1));
     }
 
     modifier updateEpochRewards() {
@@ -121,6 +115,13 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         unclaimedRewards = 0;
         want.safeTransfer(address(controller.vault(address(want))), pendingRewards);
     }
+
+    function sendTreasuryBoost() external updateEpochRewards {
+        // transfer all collected boost tokens to treasury
+        uint256 boosterAmount = boostToken.balanceOf(address(this));
+        boostToken.safeApprove(address(controller.treasury()), boosterAmount);
+        controller.treasury().deposit(boostToken, boosterAmount);
+    }
     
     function boost() external updateEpochRewards {
         require(
@@ -139,10 +140,6 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         controller.increaseHurdleRate(address(want));
         
         boostToken.safeTransferFrom(msg.sender, address(this), boosterAmount);
-        
-        // transfer boosts to treasury
-        boostToken.safeApprove(address(controller.treasury()), boosterAmount);
-        controller.treasury().deposit(boostToken, boosterAmount);
     }
 
     // can only be called by vault (withdrawal fee) or approved strategy

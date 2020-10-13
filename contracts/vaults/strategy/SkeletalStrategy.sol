@@ -37,7 +37,7 @@ contract SkeletalStrategy is IStrategy {
 
     uint256 public constant PERFORMANCE_FEE = 500; // 5%
     uint256 public constant DENOM = 10000;
-    uint256 public lastHurdleUpdateTime;
+    uint256 public hurdleLastUpdateTime;
     uint256 public harvestAmountThisEpoch;
     uint256 public strategistCollectedFee;
     IERC20 public want; // should be set only in constructor
@@ -61,6 +61,8 @@ contract SkeletalStrategy is IStrategy {
         strategist = _strategist;
     }
 
+    // TODO: Customise this method, as long as it calls controller.earn()
+    // and does something with the funds
     // Example: Calc fund availability, then send it all to this contract
     function deposit() public {
         uint256 availFunds = controller.vault(address(want)).availableFunds();
@@ -68,6 +70,9 @@ contract SkeletalStrategy is IStrategy {
         controller.earn(address(this), availFunds);
         // TODO: funds would be sent here.. convert to desired token (if needed) for investment
     }
+
+    // TODO: Implement this, should return amount invested
+    function balanceOf() external view returns (uint256);
 
     function withdraw(address token) external {
         IERC20 erc20Token = IERC20(token);
@@ -96,11 +101,7 @@ contract SkeletalStrategy is IStrategy {
         want.safeTransfer(address(controller.vault(address(want))), balance);
     }
 
-    function harvest(address harvester) external {
-        require(
-            msg.sender == harvester || msg.sender == address(controller.vault(address(want))),
-            "invalid harvester"
-        );
+    function harvest() external {
         // TODO: collect farmed tokens and sell for want token
 
         uint256 remainingWantAmount = want.balanceOf(address(this)).sub(strategistCollectedFee);
@@ -109,20 +110,20 @@ contract SkeletalStrategy is IStrategy {
         uint256 harvestPercentage;
         uint256 epochTime;
         (vaultRewardPercentage, hurdleAmount, harvestPercentage) = 
-            controller.getHarvestInfo(address(this), harvester);
+            controller.getHarvestInfo(address(this), msg.sender);
 
         // check if harvest amount has to be reset
-        if (lastHurdleUpdateTime < epochTime) {
+        if (hurdleLastUpdateTime < epochTime) {
             // reset collected amount
             harvestAmountThisEpoch = 0;
         }
         // update variables
-        lastHurdleUpdateTime = block.timestamp;
+        hurdleLastUpdateTime = block.timestamp;
         harvestAmountThisEpoch = harvestAmountThisEpoch.add(remainingWantAmount);
 
         // first, take harvester fee
         uint256 harvestFee = remainingWantAmount.mul(harvestPercentage).div(DENOM);
-        want.safeTransfer(harvester, harvestFee);
+        want.safeTransfer(msg.sender, harvestFee);
 
         uint256 fee;
         // then, if hurdle amount has been exceeded, take performance fee
