@@ -1,0 +1,10 @@
+{
+    "swapRouter": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+    "usdc": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "ycrv": "0xdf5e0e81dff6faf3a7e52ba697820c5e32d806a8",
+    "boost": "0x3e780920601d61cedb860fe9c4a90c9ea6a35e78",
+    "multisig": "0xf0d3Db2e1752fE133d6C5Ee0FcbBB0632F745A05",
+    "epochStart": 1602919800,
+    "cap": 100000000000
+}
+  

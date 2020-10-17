@@ -29,7 +29,7 @@ import "../SafeMath.sol";
 import "../zeppelin/SafeERC20.sol";
 
 
-contract Controller is IController {
+contract BoostController is IController {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;

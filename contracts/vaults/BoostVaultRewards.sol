@@ -73,7 +73,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     constructor(
         IERC20 _stakeToken, // bf-token
         IERC20 _boostToken,
-        IController _controller,
+        IController _controller
     ) public LPTokenWrapper(_stakeToken) {
         boostToken = _boostToken;
         want = IVault(address(_stakeToken)).want();
