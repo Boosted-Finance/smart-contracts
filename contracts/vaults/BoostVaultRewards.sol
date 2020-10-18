@@ -163,7 +163,9 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         rewardAmount = reward.sub(rewardAmount);
         currentEpoch.rewardsAvailable = currentEpoch.rewardsAvailable.add(rewardAmount);
         currentEpoch.rewardPerToken = currentEpoch.rewardPerToken.add(
-            rewardAmount.mul(PRECISION).div(boostedTotalSupply)
+            (boostedTotalSupply == 0) ?
+            rewardAmount :
+            rewardAmount.mul(PRECISION).div(boostedTotalSupply) 
         );
         emit RewardAdded(reward);
     }

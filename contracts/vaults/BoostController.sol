@@ -137,6 +137,10 @@ contract BoostController is IController {
         lastUpdateTime = info.harvestLastUpdateTime[user];
     }
 
+    function getStrategies(address token) external view returns (IStrategy[] memory strategies) {
+        return tokenStratsInfo[token].strategies;
+    }
+
     function setTreasury(ITreasury _treasury) external updateEpoch {
         require(msg.sender == gov, "!gov");
         treasury = _treasury;
@@ -313,9 +317,11 @@ contract BoostController is IController {
             uint256 actualWithdrawAmount = Math.min(
                 investedAmounts[address(strategy)], remainingWithdrawAmount
             );
+            // update remaining withdraw amt
             remainingWithdrawAmount = remainingWithdrawAmount.sub(actualWithdrawAmount);
+            // update strat invested amt
             investedAmounts[address(strategy)] = investedAmounts[address(strategy)]
-                    .sub(remainingWithdrawAmount);
+                    .sub(actualWithdrawAmount);
             // do the actual withdrawal
             strategy.withdraw(actualWithdrawAmount);
         }

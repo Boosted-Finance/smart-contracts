@@ -170,8 +170,7 @@ contract MStableStrat is IStrategy {
 
         // convert musd to usdc
         usdcAmt = usdcAmt.add(
-            // 1e12 = 1e18 / 1e6 (usdc has 6 decimals)
-            musdAmt.mul(1e12).div(musdcBpt.getSpotPrice(address(musd), address(usdc)))
+            musdAmt.mul(1e18).div(musdcBpt.getSpotPrice(address(musd), address(usdc)))
         );
 
         return bptStakeAmt.mul(usdcAmt).div(totalBptAmt);
@@ -185,10 +184,6 @@ contract MStableStrat is IStrategy {
     function withdraw(address token) external {
         IERC20 erc20Token = IERC20(token);
         require(msg.sender == address(controller), "!controller");
-        require(erc20Token != want, "want");
-        require(erc20Token != musd, "musd");
-        require(erc20Token != mta, "mta");
-        require(token != address(musdcBpt), "bpt");
         erc20Token.safeTransfer(address(controller), erc20Token.balanceOf(address(this)));
     }
 
@@ -215,7 +210,15 @@ contract MStableStrat is IStrategy {
         mPool.exit();
 
         // convert reward to want tokens
-        exchangeRewardForWant(true);
+        // in case swap fails, continue
+        (bool success, ) = address(this).call(
+            abi.encodeWithSignature(
+                "exchangeRewardForWant(bool)",
+                true
+            )
+        );
+        // to remove compiler warning
+        success;
 
         // convert bpt to want tokens
         musdcBpt.exitswapPoolAmountIn(
@@ -242,7 +245,15 @@ contract MStableStrat is IStrategy {
         }
 
         // convert 80% reward to want tokens
-        exchangeRewardForWant(false);
+        // in case swap fails, continue
+        (bool success, ) = address(this).call(
+            abi.encodeWithSignature(
+                "exchangeRewardForWant(bool)",
+                false
+            )
+        );
+        // to remove compiler warning
+        success;
 
         amount = want.balanceOf(address(this)).sub(strategistCollectedFee);
         uint256 vaultRewardPercentage;
@@ -297,6 +308,48 @@ contract MStableStrat is IStrategy {
         want.safeTransfer(strategist, strategistCollectedFee);
     }
 
+    function exitMGov() external {
+        mtaGov.withdraw();
+        // convert to want tokens
+        // in case swap fails, continue
+        (bool success, ) = address(this).call(
+            abi.encodeWithSignature(
+                "exchangeRewardForWant(bool)",
+                true
+            )
+        );
+        // to remove compiler warning
+        success;
+        want.safeTransfer(
+            address(controller.rewards(address(want))),
+            want.balanceOf(address(this)).sub(strategistCollectedFee)
+        );
+    }
+
+    function exchangeRewardForWant(bool exchangeAll) public {
+        require(msg.sender == address(this), "not this");
+        uint256 swapAmt = mta.balanceOf(address(this));
+        if (swapAmt == 0) return;
+
+        // use mta-musd pool
+        swapAmt = balProxy.smartSwapExactIn(
+            mta,
+            musd,
+            exchangeAll ? swapAmt : swapAmt.mul(8000).div(DENOM),
+            0,
+            numPools
+        );
+
+        // use musd-usdc pool
+        balProxy.smartSwapExactIn(
+            musd,
+            want,
+            swapAmt,
+            0,
+            numPools
+        );
+    }
+
     function depositMTAInStaking() internal {
         uint256 mtaBal = mta.balanceOf(address(this));
         if (mtaBal == 0) return;
@@ -307,16 +360,5 @@ contract MStableStrat is IStrategy {
             // increase amount
             mtaGov.increaseLockAmount(mtaBal);
         }
-    }
-    
-    function exchangeRewardForWant(bool exchangeAll) internal returns (uint256) {
-        uint256 mtaToSwap = mta.balanceOf(address(this));
-        balProxy.smartSwapExactIn(
-            mta,
-            want,
-            exchangeAll ? mtaToSwap : mtaToSwap.mul(8000).div(DENOM),
-            0,
-            numPools
-        );
     }
 }
