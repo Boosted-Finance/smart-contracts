@@ -38,10 +38,10 @@ contract BoostVault is ERC20, ERC20Detailed {
     IERC20 public want;
   
     uint256 public maxUtilisation = 9500;
-    uint256 public withdrawalFee = 350;
+    uint256 public withdrawalFee = 35; // 0.35%
     uint256 public cap;
     uint256 public constant MAX_UTILISATION_ALLOWABLE = 9900; // max 99% utilisation
-    uint256 public constant MAX_WITHDRAWAL_FEE = 500; // 5%
+    uint256 public constant MAX_WITHDRAWAL_FEE = 100; // 1%
     uint256 public constant DENOM = 10000;
   
     address public gov;
@@ -90,6 +90,7 @@ contract BoostVault is ERC20, ERC20Detailed {
     }
 
     function setWithdrawalFee(uint256 _percent) external {
+        require(msg.sender == gov, "not gov");
         require (_percent <= MAX_WITHDRAWAL_FEE, "fee too high");
         withdrawalFee = _percent;
     }

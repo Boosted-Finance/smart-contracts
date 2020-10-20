@@ -82,6 +82,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         controller = _controller;
         gov = _gov;
         currentEpochTime = controller.currentEpochTime();
+        lastBoostPurchase = block.timestamp;
     }
 
     modifier updateEpochRewards() {
@@ -196,7 +197,10 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         boostersBought = boostersBought.add(1);
 
         // 2.5% decrease for every 2 hour interval since last global boost purchase
-        boosterPrice = pow(boosterPrice, 975, 1000, (block.timestamp.sub(lastBoostPurchase)).div(2 hours));
+        // max of 8 iterations
+        uint256 numIterations = (block.timestamp.sub(lastBoostPurchase)).div(2 hours);
+        numIterations = Math.min(8, numIterations);
+        boosterPrice = pow(boosterPrice, 975, 1000, numIterations);
 
         // adjust price based on expected increase in boost supply
         // boostersBought has been incremented by 1 already

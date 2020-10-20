@@ -67,7 +67,7 @@ contract BoostController is IController {
     uint256 internal constant PRICE_INCREASE = 10100; // 1.01x
     uint256 internal constant EPOCH_PRICE_REDUCTION = 8000; // 0.8x
 
-    uint256 vaultRewardChangePrice = 5e18; // initial cost of 5 boosts
+    uint256 vaultRewardChangePrice = 10e18; // initial cost of 10 boosts
     uint256 public globalVaultRewardPercentage = BASE_REWARD_PERCENTAGE;
     uint256 vaultRewardLastUpdateTime;
     
@@ -246,7 +246,7 @@ contract BoostController is IController {
         treasury.deposit(token, bal);
     }
 
-    function increaseHarvestPercentage(address token) external updateEpoch {
+    function increaseHarvestPercentageHurdleRate(address token) external updateEpoch {
         TokenStratInfo storage info = tokenStratsInfo[token];
         // first, handle vault global price and update time
         // if new epoch, reduce price by 20%
@@ -276,7 +276,7 @@ contract BoostController is IController {
             HARVEST_PERCENTAGE_MAX,
             info.harvestPercentages[msg.sender].add(25)
         );
-        increaseHurdleRate(token);
+        increaseHurdleRateInternal(info);
     }
 
     function changeVaultRewardPercentage(bool isIncrease) external updateEpoch {
@@ -334,9 +334,13 @@ contract BoostController is IController {
         IStrategy(strategy).withdrawAll();
     }
 
-    function increaseHurdleRate(address token) public updateEpoch {
+    function increaseHurdleRate(address token) external updateEpoch {
         TokenStratInfo storage info = tokenStratsInfo[token];
-        require(msg.sender == address(info.rewards) || msg.sender == address(this), "!authorized");
+        require(msg.sender == address(info.rewards), "!authorized");
+        increaseHurdleRateInternal(info);
+    }
+
+    function increaseHurdleRateInternal(TokenStratInfo storage info) internal {
         // see if hurdle rate has to update
         if (info.hurdleLastUpdateTime < currentEpochTime) {
             info.currentHurdleRate = info.nextHurdleRate;
