@@ -58,7 +58,7 @@ contract BoostController is IController {
     mapping(address => mapping(address => bool)) public approvedStrategies;
 
     uint256 public currentEpochTime;
-    uint256 public constant EPOCH_DURATION = 2 weeks;
+    uint256 public constant EPOCH_DURATION = 1 weeks;
     uint256 internal constant DENOM = 10000;
     uint256 internal constant HURDLE_RATE_MAX = 500; // max 5%
     uint256 internal constant BASE_HARVEST_PERCENTAGE = 50; // 0.5%
@@ -67,7 +67,7 @@ contract BoostController is IController {
     uint256 internal constant PRICE_INCREASE = 10100; // 1.01x
     uint256 internal constant EPOCH_PRICE_REDUCTION = 8000; // 0.8x
 
-    uint256 vaultRewardChangePrice = 10e18; // initial cost of 10 boosts
+    uint256 vaultRewardChangePrice = 5e18; // initial cost of 5 boosts
     uint256 public globalVaultRewardPercentage = BASE_REWARD_PERCENTAGE;
     uint256 vaultRewardLastUpdateTime;
     
@@ -202,9 +202,6 @@ contract BoostController is IController {
         tokenStrategies.length--;
         capAmounts[_strategy] = 0;
         approvedStrategies[token][_strategy] = false;
-
-        // withdraw all funds in strategy back to vault
-        withdrawAll(_strategy);
     }
     
     function getHurdleAmount(address strategy, address token) public view returns (uint256) {
@@ -327,6 +324,16 @@ contract BoostController is IController {
         }
     }
 
+    function withdrawAll(address strategy) external updateEpoch {
+        require(
+            msg.sender == strategist ||
+            msg.sender == gov,
+            "!authorized"
+        );
+        investedAmounts[strategy] = 0;
+        IStrategy(strategy).withdrawAll();
+    }
+
     function increaseHurdleRate(address token) public updateEpoch {
         TokenStratInfo storage info = tokenStratsInfo[token];
         require(msg.sender == address(info.rewards) || msg.sender == address(this), "!authorized");
@@ -338,17 +345,6 @@ contract BoostController is IController {
         info.hurdleLastUpdateTime = block.timestamp;
         // increase hurdle rate by 0.01%
         info.nextHurdleRate = Math.min(HURDLE_RATE_MAX, info.nextHurdleRate.add(1));
-    }
-
-    function withdrawAll(address strategy) public updateEpoch {
-        require(
-            msg.sender == strategist ||
-            msg.sender == gov ||
-            msg.sender == address(this),
-            "!authorized"
-        );
-        investedAmounts[strategy] = 0;
-        IStrategy(strategy).withdrawAll();
     }
     
     function inCaseTokensGetStuck(address token, uint amount) public updateEpoch {

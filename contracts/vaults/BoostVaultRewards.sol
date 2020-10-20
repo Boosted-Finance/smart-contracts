@@ -40,6 +40,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     IERC20 public boostToken;
     IERC20 public want;
     IController public controller;
+    address public gov;
     
     EpochRewards public previousEpoch;
     EpochRewards public currentEpoch;
@@ -48,7 +49,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     mapping(address => uint256) public previousEpochRewardsClaimable;
     mapping(address => uint256) public currentEpochRewardsClaimable;
 
-    uint256 public constant EPOCH_DURATION = 2 weeks;
+    uint256 public constant EPOCH_DURATION = 1 weeks;
     uint256 public currentEpochTime;
     uint256 public unclaimedRewards;
     
@@ -73,11 +74,13 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     constructor(
         IERC20 _stakeToken, // bf-token
         IERC20 _boostToken,
-        IController _controller
+        IController _controller,
+        address _gov
     ) public LPTokenWrapper(_stakeToken) {
         boostToken = _boostToken;
         want = IVault(address(_stakeToken)).want();
         controller = _controller;
+        gov = _gov;
         currentEpochTime = controller.currentEpochTime();
     }
 
@@ -104,6 +107,16 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         return (block.timestamp > currentEpochTime + EPOCH_DURATION) ?
             _earned(user, true) :
             _earned(user, false).add(_earned(user, true));
+    }
+
+    function setGovernance(address _gov) external updateEpochRewards {
+        require(msg.sender == gov, "not gov");
+        gov = _gov;
+    }
+  
+    function setController(IController _controller) external updateEpochRewards {
+        require(msg.sender == gov, "not gov");
+        controller = _controller;
     }
 
     function getReward(address user) external updateEpochRewards {

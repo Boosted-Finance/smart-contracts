@@ -234,15 +234,8 @@ contract MStableStrat is IStrategy {
     }
 
     function harvest() external {
-        (uint256 amount,) = mPool.earned(address(this));
-        // collect farmed tokens
-        if (amount > 0) {
-            mPool.claimReward();
-        }
-
-        if (mtaGov.earned(address(this)) > 0) {
-            mtaGov.claimReward();
-        }
+        mPool.claimReward();
+        mtaGov.claimReward();
 
         // convert 80% reward to want tokens
         // in case swap fails, continue
@@ -255,7 +248,7 @@ contract MStableStrat is IStrategy {
         // to remove compiler warning
         success;
 
-        amount = want.balanceOf(address(this)).sub(strategistCollectedFee);
+        uint256 amount = want.balanceOf(address(this)).sub(strategistCollectedFee);
         uint256 vaultRewardPercentage;
         uint256 hurdleAmount;
         uint256 harvestPercentage;
