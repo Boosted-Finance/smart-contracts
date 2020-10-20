@@ -25,20 +25,9 @@ pragma solidity 0.5.17;
 
 import "../IStrategy.sol";
 import "../IController.sol";
+import "../../ISwapRouter.sol";
 import "../../SafeMath.sol";
 import "../../zeppelin/SafeERC20.sol";
-
-interface IBalProxy {
-    function smartSwapExactIn(
-        IERC20 tokenIn,
-        IERC20 tokenOut,
-        uint totalAmountIn,
-        uint minTotalAmountOut,
-        uint nPools
-    )
-        external payable
-        returns (uint totalAmountOut);
-}
 
 interface IBPT {
     function totalSupply() external view returns (uint256);
@@ -99,7 +88,7 @@ contract MStableStrat is IStrategy {
 
     IBPT internal musdcBpt = IBPT(0x72Cd8f4504941Bf8c5a21d1Fd83A96499FD71d2C);
 
-    IBalProxy internal balProxy = IBalProxy(0x3E66B66Fd1d0b02fDa6C811Da9E0547970DB2f21);
+    SwapRouter public swapRouter = SwapRouter(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
     IMPool internal mPool = IMPool(0x881c72D1e6317f10a1cDCBe05040E7564E790C80);
     IMTAGov internal mtaGov = IMTAGov(0xaE8bC96DA4F9A9613c323478BE181FDb2Aa0E1BF);
 
@@ -133,7 +122,7 @@ contract MStableStrat is IStrategy {
         for (uint i = 0; i < recipients.length; i++) {
             require(
                 recipients[i] == address(musdcBpt) ||
-                recipients[i] == address(balProxy) ||
+                recipients[i] == address(swapRouter) ||
                 recipients[i] == address(mPool) ||
                 recipients[i] == address(mtaGov),
                 "bad recipient"
@@ -233,12 +222,12 @@ contract MStableStrat is IStrategy {
         want.safeTransfer(address(controller.vault(address(want))), balance);
     }
 
-    function harvest() external {
-        mPool.claimReward();
-        mtaGov.claimReward();
+    function harvest(bool claimMPool, bool claimGov) external {
+        if (claimMPool) mPool.claimReward();
+        if (claimGov) mtaGov.claimReward();
 
         // convert 80% reward to want tokens
-        // in case swap fails, continue
+        // in case swap fails, return
         (bool success, ) = address(this).call(
             abi.encodeWithSignature(
                 "exchangeRewardForWant(bool)",
@@ -246,7 +235,7 @@ contract MStableStrat is IStrategy {
             )
         );
         // to remove compiler warning
-        success;
+        if (!success) return;
 
         uint256 amount = want.balanceOf(address(this)).sub(strategistCollectedFee);
         uint256 vaultRewardPercentage;
@@ -279,7 +268,7 @@ contract MStableStrat is IStrategy {
         // do the subtraction of harvester and strategist fees
         amount = amount.sub(harvestFee).sub(fee);
 
-        // finally, calculate how much is to be re-invested
+        // calculate how much is to be re-invested
         // fee = vault reward amount, reusing variable
         fee = amount.mul(vaultRewardPercentage).div(DENOM);
         want.safeTransfer(address(controller.rewards(address(want))), fee);
@@ -320,26 +309,21 @@ contract MStableStrat is IStrategy {
     }
 
     function exchangeRewardForWant(bool exchangeAll) public {
-        require(msg.sender == address(this), "not this");
         uint256 swapAmt = mta.balanceOf(address(this));
         if (swapAmt == 0) return;
 
-        // use mta-musd pool
-        swapAmt = balProxy.smartSwapExactIn(
-            mta,
-            musd,
+        // do the exchange
+        address[] memory routeDetails = new address[](3);
+        routeDetails[0] = address(mta);
+        routeDetails[1] = swapRouter.WETH();
+        routeDetails[2] = address(want);
+
+        swapRouter.swapExactTokensForTokens(
             exchangeAll ? swapAmt : swapAmt.mul(8000).div(DENOM),
             0,
-            numPools
-        );
-
-        // use musd-usdc pool
-        balProxy.smartSwapExactIn(
-            musd,
-            want,
-            swapAmt,
-            0,
-            numPools
+            routeDetails,
+            address(this),
+            block.timestamp + 100
         );
     }
 
