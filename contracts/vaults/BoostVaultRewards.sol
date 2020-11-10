@@ -99,13 +99,13 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
                 rewardsAvailable: 0,
                 rewardsClaimed: 0,
                 rewardPerToken: 0
-            });
+            }); 
         }
         _;
     }
 
     function earned(address user) external view returns (uint256) {
-        return (block.timestamp > currentEpochTime + EPOCH_DURATION) ?
+        return (block.timestamp > currentEpochTime.add(EPOCH_DURATION)) ?
             _earned(user, true) :
             _earned(user, false).add(_earned(user, true));
     }
@@ -273,19 +273,23 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     }
 
     function updateClaimUserRewardAndBooster(address user) internal {
-        // first, reset previous epoch stats and booster count if user's last action exceeds 1 epoch
-        if (lastActionTime[user].add(EPOCH_DURATION) <= currentEpochTime) {
-            previousEpochRewardsClaimable[user] = 0;
-            previousEpochUserRewardPerTokenPaid[user] = 0;
-            numBoostersBought[user] = 0;
-        }
-        // then, update user's claimable amount and booster count for the previous epoch
         if (lastActionTime[user] <= currentEpochTime) {
+            // reset previous epoch stats if user's last action exceeds 1 epoch
+            if (lastActionTime[user].add(EPOCH_DURATION) <= currentEpochTime) {
+                previousEpochRewardsClaimable[user] = 0;
+                previousEpochUserRewardPerTokenPaid[user] = 0;
+            }
+            // update user's claimable amount and booster count for the previous epoch
             previousEpochRewardsClaimable[user] = _earned(user, false);
             previousEpochUserRewardPerTokenPaid[user] = previousEpoch.rewardPerToken;
+            // reset current epoch stats
+            currentEpochRewardsClaimable[user] = 0;
+            currentEpochUserRewardPerTokenPaid[user] = 0;
+            // reset booster count
             numBoostersBought[user] = 0;
         }
-        // finally, update user's claimable amount for current epoch
+
+        // update user's claimable amount for current epoch
         currentEpochRewardsClaimable[user] = _earned(user, true);
         currentEpochUserRewardPerTokenPaid[user] = currentEpoch.rewardPerToken;
         
@@ -299,13 +303,14 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         reward = reward.add(currentEpochRewardsClaimable[user]);
         currentEpochRewardsClaimable[user] = 0;
 
+        // update user's action timestamp
+        lastActionTime[user] = block.timestamp;
+
+        // finally, do transfer
         if (reward > 0) {
             want.safeTransfer(user, reward);
             emit RewardPaid(user, reward);
         }
-
-        // last, update user's action timestamp
-        lastActionTime[user] = block.timestamp;
     }
 
     function applyBoost(address user, uint256 newBoostBalance) internal {
