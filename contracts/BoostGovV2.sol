@@ -62,9 +62,8 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
 
     // reward variables
     uint256 public constant DURATION = 3 days;
-    uint256 public starttime;
-    uint256 public periodFinish = 0;
-    uint256 public rewardRate = 0;
+    uint256 public periodFinish;
+    uint256 public rewardRate;
     uint256 public lastUpdateTime;
     uint256 public rewardPerTokenStored;
     IERC20 public boostToken;
@@ -76,7 +75,7 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
     uint256 public proposalCount;
     uint256 public constant PROPOSAL_PERIOD = 2 days;
     uint256 public constant LOCK_PERIOD = 3 days;
-    uint256 public minimum = 1337e16; // 13.37 BOOST
+    uint256 public constant MIN_BOOST_AMT = 1337e16; // 13.37 BOOST
 
     constructor(IERC20 _stakeToken, ITreasury _treasury, SwapRouter _swapRouter)
         public
@@ -84,10 +83,10 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
     {
         boostToken = _stakeToken;
         treasury = _treasury;
+        swapRouter = _swapRouter;
         stablecoin = treasury.defaultToken();
         stablecoin.safeApprove(address(treasury), uint256(-1));
-        stakeToken.safeApprove(address(_swapRouter), uint256(-1));
-        swapRouter = _swapRouter;
+        stakeToken.safeApprove(address(swapRouter), uint256(-1));
     }
 
     modifier updateReward(address account) {
@@ -122,7 +121,7 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
         uint256 _withdrawAmount,
         address _withdrawAddress
     ) external {
-        require(balanceOf(msg.sender) > minimum, "stake more boost");
+        require(balanceOf(msg.sender) > MIN_BOOST_AMT, "stake more boost");
         proposals[proposalCount++] = Proposal({
             proposer: msg.sender,
             withdrawAddress: _withdrawAddress,
@@ -182,31 +181,32 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
     }
 
     function resolveProposal(uint256 id) public updateReward(msg.sender) {
-        require(proposals[id].proposer != address(0), "non-existent proposal");
-        require(proposals[id].end < block.timestamp , "ongoing proposal");
-        require(proposals[id].totalSupply == 0, "already resolved");
+        Proposal storage proposal = proposals[id];
+        require(proposal.proposer != address(0), "non-existent proposal");
+        require(proposal.end < block.timestamp , "ongoing proposal");
+        require(proposal.totalSupply == 0, "already resolved");
 
         // update proposal total supply
-        proposals[id].totalSupply = Math.sqrt(totalSupply());
+        proposal.totalSupply = Math.sqrt(totalSupply());
 
         // sum votes, multiply by precision, divide by square rooted total supply
         uint256 quorum = 
-            (proposals[id].totalForVotes.add(proposals[id].totalAgainstVotes))
+            (proposal.totalForVotes.add(proposal.totalAgainstVotes))
             .mul(PERCENTAGE_PRECISION)
-            .div(proposals[id].totalSupply);
+            .div(proposal.totalSupply);
 
-        if ((quorum < MIN_QUORUM_PUNISHMENT) && proposals[id].withdrawAmount > WITHDRAW_THRESHOLD) {
+        if ((quorum < MIN_QUORUM_PUNISHMENT) && proposal.withdrawAmount > WITHDRAW_THRESHOLD) {
             // user's stake gets slashed, converted to stablecoin and sent to treasury
-            uint256 amount = slash(proposals[id].proposer);
+            uint256 amount = slash(proposal.proposer);
             convertAndSendTreasuryFunds(amount);
         } else if (
             (quorum > MIN_QUORUM_THRESHOLD) &&
-            (proposals[id].totalForVotes > proposals[id].totalAgainstVotes)
+            (proposal.totalForVotes > proposal.totalAgainstVotes)
          ) {
             // treasury to send funds to proposal
             treasury.withdraw(
-                proposals[id].withdrawAmount,
-                proposals[id].withdrawAddress
+                proposal.withdrawAmount,
+                proposal.withdrawAddress
             );
         }
     }

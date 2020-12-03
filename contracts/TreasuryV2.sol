@@ -61,6 +61,12 @@ contract TreasuryV2 is Ownable, ITreasury {
         govSetter = msg.sender;
     }
 
+    modifier srcTokenCheck(address srcToken) {
+        require(srcToken != address(boostToken), "src can't be boost");
+        require(srcToken != address(defaultToken), "src can't be defaultToken");
+        _;
+    }
+
     function setGov(address _gov) external {
         require(msg.sender == govSetter, "not authorized");
         gov = _gov;
@@ -103,9 +109,7 @@ contract TreasuryV2 is Ownable, ITreasury {
         defaultToken.safeTransfer(withdrawAddress, amount);
     }
 
-    function convertToDefaultToken(address[] calldata routeDetails, uint256 amount) external {
-        require(routeDetails[0] != address(boostToken), "src can't be boost");
-        require(routeDetails[0] != address(defaultToken), "src can't be defaultToken");
+    function convertToDefaultToken(address[] calldata routeDetails, uint256 amount) external srcTokenCheck(routeDetails[0]) {
         require(routeDetails[routeDetails.length - 1] == address(defaultToken), "dest not defaultToken");
         IERC20 srcToken = IERC20(routeDetails[0]);
         require(balanceOf(srcToken) >= amount, "insufficient funds");
@@ -113,18 +117,17 @@ contract TreasuryV2 is Ownable, ITreasury {
             srcToken.safeApprove(address(swapRouter), 0);
             srcToken.safeApprove(address(swapRouter), uint256(-1));
         }
-        swapRouter.swapExactTokensForTokens(
+        uint256 returnedAmts = swapRouter.swapExactTokensForTokens(
             amount,
             0,
             routeDetails,
             address(this),
             block.timestamp + 100
         );
+        require(returnedAmts.length > 0, "empty return array");
     }
 
-    function convertToBoostToken(address[] calldata routeDetails, uint256 amount) external {
-        require(routeDetails[0] != address(boostToken), "src can't be boost");
-        require(routeDetails[0] != address(defaultToken), "src can't be defaultToken");
+    function convertToBoostToken(address[] calldata routeDetails, uint256 amount) external srcTokenCheck(routeDetails[0]) {
         require(routeDetails[routeDetails.length - 1] == address(boostToken), "dest not boostToken");
         IERC20 srcToken = IERC20(routeDetails[0]);
         require(balanceOf(srcToken) >= amount, "insufficient funds");
@@ -132,13 +135,14 @@ contract TreasuryV2 is Ownable, ITreasury {
             srcToken.safeApprove(address(swapRouter), 0);
             srcToken.safeApprove(address(swapRouter), uint256(-1));
         }
-        swapRouter.swapExactTokensForTokens(
+        uint256 returnedAmts = swapRouter.swapExactTokensForTokens(
             amount,
             0,
             routeDetails,
             address(this),
             block.timestamp + 100
         );
+        require(returnedAmts.length > 0, "empty return array");
     }
 
     function rewardVoters() external {

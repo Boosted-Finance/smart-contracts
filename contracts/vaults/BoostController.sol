@@ -84,7 +84,16 @@ contract BoostController is IController {
         boostToken = _boostToken;
         currentEpochTime = _epochStart;
     }
-    
+
+    modifier onlyGov() {
+        require(msg.sender == gov, "not gov");
+        _;
+    }
+    modifier onlyGovOrStrat() {
+        require(msg.sender == gov, "not gov");
+        _;
+    }
+
     modifier updateEpoch() {
         if (block.timestamp > currentEpochTime.add(EPOCH_DURATION)) {
             currentEpochTime = currentEpochTime.add(EPOCH_DURATION);
@@ -141,30 +150,25 @@ contract BoostController is IController {
         return tokenStratsInfo[token].strategies;
     }
 
-    function setTreasury(ITreasury _treasury) external updateEpoch {
-        require(msg.sender == gov, "!gov");
+    function setTreasury(ITreasury _treasury) external onlyGov updateEpoch {
         treasury = _treasury;
     }
     
-    function setStrategist(address _strategist) external updateEpoch {
-        require(msg.sender == gov, "!gov");
+    function setStrategist(address _strategist) external onlyGov updateEpoch {
         strategist = _strategist;
     }
     
-    function setGovernance(address _gov) external updateEpoch {
-        require(msg.sender == gov, "!gov");
+    function setGovernance(address _gov) external onlyGov updateEpoch {
         gov = _gov;
     }
 
-    function setRewards(IVaultRewards _rewards) external updateEpoch {
-        require(msg.sender == strategist || msg.sender == gov, "!authorized");
+    function setRewards(IVaultRewards _rewards) external onlyGovOrStrat updateEpoch {
         address token = address(_rewards.want());
         require(tokenStratsInfo[token].rewards == IVaultRewards(0), "rewards exists");
         tokenStratsInfo[token].rewards = _rewards;
     }
     
-    function setVaultAndInitHarvestInfo(IVault _vault) external updateEpoch {
-        require(msg.sender == strategist || msg.sender == gov, "!authorized");
+    function setVaultAndInitHarvestInfo(IVault _vault) external onlyGovOrStrat updateEpoch {
         address token = address(_vault.want());
         TokenStratInfo storage info = tokenStratsInfo[token];
         require(info.vault == IVault(0), "vault exists");
@@ -174,8 +178,7 @@ contract BoostController is IController {
         info.globalHarvestLastUpdateTime = currentEpochTime;
     }
     
-    function approveStrategy(address _strategy, uint256 _cap) external updateEpoch {
-        require(msg.sender == gov, "!gov");
+    function approveStrategy(address _strategy, uint256 _cap) external onlyGov updateEpoch {
         address token = IStrategy(_strategy).want();
         require(!approvedStrategies[token][_strategy], "strat alr approved");
         require(tokenStratsInfo[token].vault.want() == IERC20(token), "unequal wants");
@@ -184,13 +187,11 @@ contract BoostController is IController {
         approvedStrategies[token][_strategy] = true;
     }
     
-    function changeCap(address strategy, uint256 _cap) external updateEpoch {
-        require(msg.sender == gov, "!gov");
+    function changeCap(address strategy, uint256 _cap) external onlyGov updateEpoch {
         capAmounts[strategy] = _cap;
     }
 
-    function revokeStrategy(address _strategy, uint256 _index) external updateEpoch {
-        require(msg.sender == gov, "!gov");
+    function revokeStrategy(address _strategy, uint256 _index) external onlyGov updateEpoch {
         address token = IStrategy(_strategy).want();
         require(approvedStrategies[token][_strategy], "strat alr revoked");
         IStrategy[] storage tokenStrategies = tokenStratsInfo[token].strategies;
@@ -198,8 +199,7 @@ contract BoostController is IController {
 
         // replace revoked strategy with last element in array
         tokenStrategies[_index] = tokenStrategies[tokenStrategies.length - 1];
-        delete tokenStrategies[tokenStrategies.length - 1];
-        tokenStrategies.length--;
+        tokenStrategies[tokenStrategies.length - 1].pop();
         capAmounts[_strategy] = 0;
         approvedStrategies[token][_strategy] = false;
     }
@@ -254,10 +254,8 @@ contract BoostController is IController {
             info.harvestPrice = info.harvestPrice.mul(EPOCH_PRICE_REDUCTION).div(DENOM);
         }
 
-        // get funds from user, send to treasury
-        boostToken.safeTransferFrom(msg.sender, address(this), info.harvestPrice);
-        boostToken.safeApprove(address(treasury), info.harvestPrice);
-        treasury.deposit(boostToken, info.harvestPrice);
+        // save current harvest price
+        uint256 currentHarvestPrice = info.harvestPrice;
 
         // increase price
         info.harvestPrice = info.harvestPrice.mul(PRICE_INCREASE).div(DENOM);
@@ -277,6 +275,11 @@ contract BoostController is IController {
             info.harvestPercentages[msg.sender].add(25)
         );
         increaseHurdleRateInternal(info);
+
+        // finally, funds from user, send to treasury
+        boostToken.safeTransferFrom(msg.sender, address(this), currentHarvestPrice);
+        boostToken.safeApprove(address(treasury), currentHarvestPrice);
+        treasury.deposit(boostToken, currentHarvestPrice);
     }
 
     function changeVaultRewardPercentage(bool isIncrease) external updateEpoch {
@@ -285,10 +288,8 @@ contract BoostController is IController {
             vaultRewardChangePrice = vaultRewardChangePrice.mul(EPOCH_PRICE_REDUCTION).div(DENOM);
         }
 
-        // get funds from user, send to treasury
-        boostToken.safeTransferFrom(msg.sender, address(this), vaultRewardChangePrice);
-        boostToken.safeApprove(address(treasury), vaultRewardChangePrice);
-        treasury.deposit(boostToken, vaultRewardChangePrice);
+        // save current vaultRewardChangePrice
+        uint256 currentVaultRewardChangePrice = vaultRewardChangePrice;
 
         // increase price
         vaultRewardChangePrice = vaultRewardChangePrice.mul(PRICE_INCREASE).div(DENOM);
@@ -299,6 +300,11 @@ contract BoostController is IController {
         } else {
             globalVaultRewardPercentage = globalVaultRewardPercentage.sub(25);
         }
+
+        // finally, get funds from user, send to treasury
+        boostToken.safeTransferFrom(msg.sender, address(this), currentVaultRewardChangePrice);
+        boostToken.safeApprove(address(treasury), currentVaultRewardChangePrice);
+        treasury.deposit(boostToken, currentVaultRewardChangePrice);
     }
     
     // handle vault withdrawal
@@ -324,14 +330,10 @@ contract BoostController is IController {
         }
     }
 
-    function withdrawAll(address strategy) external updateEpoch {
-        require(
-            msg.sender == strategist ||
-            msg.sender == gov,
-            "!authorized"
-        );
+    function withdrawAll(address strategy) external onlyGovOrStrat updateEpoch {
         investedAmounts[strategy] = 0;
-        IStrategy(strategy).withdrawAll();
+        uint256 withdrawAmt =IStrategy(strategy).withdrawAll();
+        require(withdrawAmt > 0, "0 withdraw amt");
     }
 
     function increaseHurdleRate(address token) external updateEpoch {
@@ -351,13 +353,11 @@ contract BoostController is IController {
         info.nextHurdleRate = Math.min(HURDLE_RATE_MAX, info.nextHurdleRate.add(1));
     }
     
-    function inCaseTokensGetStuck(address token, uint amount) public updateEpoch {
-        require(msg.sender == strategist || msg.sender == gov, "!authorized");
+    function inCaseTokensGetStuck(address token, uint amount) public onlyGovOrStrat updateEpoch {
         IERC20(token).safeTransfer(msg.sender, amount);
     }
     
-    function inCaseStrategyTokenGetStuck(IStrategy strategy, address token) public updateEpoch {
-        require(msg.sender == strategist || msg.sender == gov, "!authorized");
+    function inCaseStrategyTokenGetStuck(IStrategy strategy, address token) public onlyGovOrStrat updateEpoch {
         strategy.withdraw(token);
     }
 }

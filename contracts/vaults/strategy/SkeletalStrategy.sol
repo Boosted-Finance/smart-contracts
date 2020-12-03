@@ -51,13 +51,22 @@ contract SkeletalStrategy is IStrategy {
         want = _want;
     }
 
+    modifier onlyStrategist() {
+        require(msg.sender == strategist, "!strategist");
+        _;
+    }
+
+    modifier onlyController() {
+        require(msg.sender == address(controller), "!controller");
+        _;
+    }
+
     function getName() external pure returns (string memory) {
         // TODO: change return value
         return "SkeletalStrategy";
     }
 
-    function setStrategist(address _strategist) external {
-        require(msg.sender == strategist, "!strategist");
+    function setStrategist(address _strategist) external onlyStrategist {
         strategist = _strategist;
     }
 
@@ -74,25 +83,22 @@ contract SkeletalStrategy is IStrategy {
     // TODO: Implement this, should return amount invested
     function balanceOf() external view returns (uint256);
 
-    function withdraw(address token) external {
+    function withdraw(address token) external onlyController {
         IERC20 erc20Token = IERC20(token);
-        require(msg.sender == address(controller), "!controller");
         require(erc20Token != want, "want");
         // TODO: should exclude more tokens, such as the farmed token
         // and other intermediary tokens used
         erc20Token.safeTransfer(address(controller), erc20Token.balanceOf(address(this)));
     }
 
-    function withdraw(uint256 amount) external {
-        require(msg.sender == address(controller), "!controller");
+    function withdraw(uint256 amount) external onlyController {
         // TODO: process the withdrawal
 
         // send funds to vault
         want.safeTransfer(address(controller.vault(address(want))), amount);
     }
 
-    function withdrawAll() external returns (uint256 balance) {
-        require(msg.sender == address(controller), "!controller");
+    function withdrawAll() external returns (uint256 balance) onlyController {
         // TODO: process the withdrawal
         
         // exclude collected strategist fee

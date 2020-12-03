@@ -63,7 +63,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     mapping(address => uint256) public lastActionTime;
 
     uint256 public globalBoosterPrice = 1e18;
-    uint256 public scaleFactor = 125;
+    uint256 public constant SCALE_FACTOR = 125;
     uint256 internal constant PRECISION = 1e18;
     uint256 internal constant DENOM = 10000;
     uint256 internal constant TREASURY_FEE = 250;
@@ -83,6 +83,11 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         gov = _gov;
         currentEpochTime = controller.currentEpochTime();
         lastBoostPurchase = block.timestamp;
+    }
+
+    modifier onlyGov() {
+        require(msg.sender == gov, "not gov");
+        _;
     }
 
     modifier updateEpochRewards() {
@@ -110,13 +115,11 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
             _earned(user, false).add(_earned(user, true));
     }
 
-    function setGovernance(address _gov) external updateEpochRewards {
-        require(msg.sender == gov, "not gov");
+    function setGovernance(address _gov) external onlyGov updateEpochRewards {
         gov = _gov;
     }
   
-    function setController(IController _controller) external updateEpochRewards {
-        require(msg.sender == gov, "not gov");
+    function setController(IController _controller) external onlyGov updateEpochRewards {
         controller = _controller;
     }
 
@@ -149,11 +152,10 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         (uint256 boosterAmount, uint256 newBoostBalance) = getBoosterPrice(msg.sender);
         // user's balance and boostedSupply will be changed in this function
         applyBoost(msg.sender, newBoostBalance);
-
-        // increase hurdle rate
-        controller.increaseHurdleRate(address(want));
         
         boostToken.safeTransferFrom(msg.sender, address(this), boosterAmount);
+        // increase hurdle rate
+        controller.increaseHurdleRate(address(want));
     }
 
     // can only be called by vault (withdrawal fee) or approved strategy
@@ -168,19 +170,19 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
             "!authorized"
         );
 
-        // send treasury fees
-        uint256 rewardAmount = reward.mul(TREASURY_FEE).div(DENOM);
-        want.safeApprove(address(controller.treasury()), rewardAmount);
-        controller.treasury().deposit(want, rewardAmount);
+        // calc amt to be sent to treasury
+        uint256 treasuryAmount = reward.mul(TREASURY_FEE).div(DENOM);
 
         // distribute remaining fees
-        rewardAmount = reward.sub(rewardAmount);
-        currentEpoch.rewardsAvailable = currentEpoch.rewardsAvailable.add(rewardAmount);
+        uint256 rewardAmountForDist = reward.sub(treasuryAmount);
+        currentEpoch.rewardsAvailable = currentEpoch.rewardsAvailable.add(rewardAmountForDist);
         currentEpoch.rewardPerToken = currentEpoch.rewardPerToken.add(
             (boostedTotalSupply == 0) ?
-            rewardAmount :
-            rewardAmount.mul(PRECISION).div(boostedTotalSupply) 
+            rewardAmountForDist :
+            rewardAmountForDist.mul(PRECISION).div(boostedTotalSupply) 
         );
+        want.safeApprove(address(controller.treasury()), treasuryAmount);
+        controller.treasury().deposit(want, treasuryAmount);
         emit RewardAdded(reward);
     }
 
@@ -210,7 +212,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         uint256 boostBalanceIncrease = newBoostBalance.sub(boostedBalances[user]);
         boosterPrice = boosterPrice
             .mul(boostBalanceIncrease)
-            .mul(scaleFactor)
+            .mul(SCALE_FACTOR)
             .div(boostedTotalSupply);
     }
 
@@ -359,7 +361,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         else if (exponent == 1) {
             return a.mul(b).div(c);
         }
-        else if (a == 0 && exponent != 0) {
+        else if (a == 0) {
             return 0;
         }
         else {

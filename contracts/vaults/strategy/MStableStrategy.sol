@@ -103,17 +103,25 @@ contract MStableStrat is IStrategy {
         strategist = msg.sender;
     }
 
+    modifier onlyStrategist() {
+        require(msg.sender == strategist, "!strategist");
+        _;
+    }
+
+    modifier onlyController() {
+        require(msg.sender == address(controller), "!controller");
+        _;
+    }
+
     function getName() external pure returns (string memory) {
         return "MstableStrategy";
     }
 
-    function setStrategist(address _strategist) external {
-        require(msg.sender == strategist, "!strategist");
+    function setStrategist(address _strategist) external onlyStrategist {
         strategist = _strategist;
     }
 
-    function setNumPoolsForSwap(uint256 _numPools) external {
-        require(msg.sender == strategist, "!strategist");
+    function setNumPoolsForSwap(uint256 _numPools) external onlyStrategist {
         numPools = _numPools;
     }
 
@@ -170,15 +178,12 @@ contract MStableStrat is IStrategy {
         return earnedAmt.add(mtaGov.earned(address(this)));
     }
 
-    function withdraw(address token) external {
+    function withdraw(address token) external onlyController {
         IERC20 erc20Token = IERC20(token);
-        require(msg.sender == address(controller), "!controller");
         erc20Token.safeTransfer(address(controller), erc20Token.balanceOf(address(this)));
     }
 
-    function withdraw(uint256 amount) external {
-        require(msg.sender == address(controller), "!controller");
-        
+    function withdraw(uint256 amount) external onlyController {
         // exit fully
         mPool.exit();
 
@@ -192,9 +197,7 @@ contract MStableStrat is IStrategy {
         want.safeTransfer(address(controller.vault(address(want))), amount);
     }
 
-    function withdrawAll() external returns (uint256 balance) {
-        require(msg.sender == address(controller), "!controller");
-        
+    function withdrawAll() external onlyController returns (uint256 balance) {
         // exit fully
         mPool.exit();
 
@@ -241,12 +244,11 @@ contract MStableStrat is IStrategy {
         uint256 vaultRewardPercentage;
         uint256 hurdleAmount;
         uint256 harvestPercentage;
-        uint256 epochTime;
         (vaultRewardPercentage, hurdleAmount, harvestPercentage) = 
             controller.getHarvestInfo(address(this), msg.sender);
 
-        // check if harvest amount has to be reset
-        if (hurdleLastUpdateTime < epochTime) {
+        // if new epoch, harvest amount should reset
+        if (hurdleLastUpdateTime < controller.currentEpochTime()) {
             // reset collected amount
             harvestAmountThisEpoch = 0;
         }
@@ -286,8 +288,9 @@ contract MStableStrat is IStrategy {
     }
 
     function withdrawStrategistFee() external {
+        uint256 strategistFeeToTransfer = strategistCollectedFee;
         strategistCollectedFee = 0;
-        want.safeTransfer(strategist, strategistCollectedFee);
+        want.safeTransfer(strategist, strategistFeeToTransfer);
     }
 
     function exitMGov() external {

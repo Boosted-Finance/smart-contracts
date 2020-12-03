@@ -62,35 +62,35 @@ contract BoostVault is ERC20, ERC20Detailed {
       controller = _controller;
       cap = _cap;
   }
+
+    modifier onlyGov() {
+        require(msg.sender == gov, "not gov");
+        _;
+    }
   
     function balance() public view returns (uint256) {
         return want.balanceOf(address(this))
             .add(controller.balanceOf(address(want)));
     }
   
-    function setMaxUtilisation(uint256 _maxUtilisation) external {
-        require(msg.sender == gov, "not gov");
+    function setMaxUtilisation(uint256 _maxUtilisation) external onlyGov {
         require(_maxUtilisation <= MAX_UTILISATION_ALLOWABLE, "min 1%");
         maxUtilisation = _maxUtilisation;
     }
   
-    function setGovernance(address _gov) external {
-        require(msg.sender == gov, "not gov");
+    function setGovernance(address _gov) external onlyGov {
         gov = _gov;
     }
   
-    function setController(IController _controller) external {
-        require(msg.sender == gov, "not gov");
+    function setController(IController _controller) external onlyGov {
         controller = _controller;
     }
     
-    function setCap(uint256 _cap) external {
-        require(msg.sender == gov, "not gov");
+    function setCap(uint256 _cap) external onlyGov {
         cap = _cap;
     }
 
-    function setWithdrawalFee(uint256 _percent) external {
-        require(msg.sender == gov, "not gov");
+    function setWithdrawalFee(uint256 _percent) external onlyGov {
         require (_percent <= MAX_WITHDRAWAL_FEE, "fee too high");
         withdrawalFee = _percent;
     }
