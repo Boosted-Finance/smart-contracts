@@ -37,6 +37,7 @@ contract BoostVault is ERC20, ERC20Detailed {
 
     IERC20 public want;
   
+    mapping(address => uint256) lastActionTimes;
     uint256 public maxUtilisation = 9500;
     uint256 public withdrawalFee = 35; // 0.35%
     uint256 public cap;
@@ -68,6 +69,11 @@ contract BoostVault is ERC20, ERC20Detailed {
         _;
     }
   
+    modifier depositWithdrawTxCheck(address user) {
+        require(lastActionTimes[user] != block.timestamp, "deposit-withdraw same time");
+        lastActionTimes[user] = block.timestamp
+    }
+
     function balance() public view returns (uint256) {
         return want.balanceOf(address(this))
             .add(controller.balanceOf(address(want)));
@@ -111,7 +117,7 @@ contract BoostVault is ERC20, ERC20Detailed {
         want.safeTransfer(strategy, amount);
     }
 
-    function deposit(uint256 amount) external {
+    function deposit(uint256 amount) external depositWithdrawTxCheck(msg.sender) {
         uint256 poolAmt = balance();
         require(poolAmt.add(amount) <= cap, "cap exceeded");
         want.safeTransferFrom(msg.sender, address(this), amount);
@@ -124,7 +130,7 @@ contract BoostVault is ERC20, ERC20Detailed {
         _mint(msg.sender, shares);
     }
 
-    function withdraw(uint256 shares) external {
+    function withdraw(uint256 shares) external depositWithdrawTxCheck(msg.sender) {
         uint256 requestedAmt = (balance().mul(shares)).div(totalSupply());
         _burn(msg.sender, shares);
 

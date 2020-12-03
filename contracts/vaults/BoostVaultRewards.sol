@@ -109,6 +109,10 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         _;
     }
 
+    modifier stakeWithdrawTxCheck(address user) {
+        require(lastActionTime[user] != block.timestamp, "stake-withdraw same time");
+    }
+
     function earned(address user) external view returns (uint256) {
         return (block.timestamp > currentEpochTime.add(EPOCH_DURATION)) ?
             _earned(user, true) :
@@ -217,7 +221,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     }
 
     // stake visibility is public as overriding LPTokenWrapper's stake() function
-    function stake(uint256 amount) public updateEpochRewards {
+    function stake(uint256 amount) public updateEpochRewards stakeWithdrawTxCheck(msg.sender) {
         require(amount > 0, "Cannot stake 0");
         updateClaimUserRewardAndBooster(msg.sender);
         super.stake(amount);
@@ -230,7 +234,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         stakeToken.safeTransferFrom(msg.sender, address(this), amount);
     }
 
-    function withdraw(uint256 amount) public updateEpochRewards {
+    function withdraw(uint256 amount) public updateEpochRewards stakeWithdrawTxCheck(msg.sender) {
         require(amount > 0, "Cannot withdraw 0");
         updateClaimUserRewardAndBooster(msg.sender);
         super.withdraw(amount);
@@ -242,7 +246,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
 
     // simpler withdraw method, in case rewards don't update properly
     // does not claim rewards nor update user's lastActionTime
-    function emergencyWithdraw(uint256 amount) public {
+    function emergencyWithdraw(uint256 amount) public stakeWithdrawTxCheck(msg.sender) {
         super.withdraw(amount);
         // reset numBoostersBought
         numBoostersBought[msg.sender] = 0;
