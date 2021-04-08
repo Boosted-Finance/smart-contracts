@@ -69,7 +69,7 @@ contract TreasuryV3 is ITreasury {
     }
 
     function balanceOf(IERC20 token) public view returns (uint256) {
-        return token.balanceOf(address(this)).sub(ecoFundAmts[address(token)]);
+        return token.balanceOf(address(this));
     }
 
     function deposit(IERC20 token, uint256 amount) external {
@@ -77,18 +77,14 @@ contract TreasuryV3 is ITreasury {
     }
 
     function withdrawERC20(uint256 amount, address withdrawAddress, address token) external onlyGov {
-        IERC20 coin = IERC20(token);
-        require(balanceOf(coin) >= amount, "insufficient funds");
-        coin.safeTransfer(withdrawAddress, amount);
+        IERC20(coin).safeTransfer(withdrawAddress, amount);
     }
 
     function convertToOrbit(address[] calldata routeDetails, uint256 amount) external {
-        require(routeDetails[0] != address(nativeToken), "src can't be boost");
-        require(routeDetails[routeDetails.length - 1] == address(nativeToken), "dest not defaultToken");
+        require(routeDetails[routeDetails.length - 1] == address(nativeToken), "dest not nativeToken");
         IERC20 srcToken = IERC20(routeDetails[0]);
         require(balanceOf(srcToken) >= amount, "insufficient funds");
         if (srcToken.allowance(address(this), address(swapRouter)) <= amount) {
-            srcToken.safeApprove(address(swapRouter), 0);
             srcToken.safeApprove(address(swapRouter), uint256(-1));
         }
         swapRouter.swapExactTokensForTokens(
