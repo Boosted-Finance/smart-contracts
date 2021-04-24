@@ -1,199 +1,159 @@
 //SPDX-License-Identifier: MIT
 /*
-* MIT License
-* ===========
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-*/
+ * MIT License
+ * ===========
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ */
 
 pragma solidity 0.5.17;
 
-import "../SafeMath.sol";
-import "../zeppelin/SafeERC20.sol";
-import "./IController.sol";
 import "./IVaultRewards.sol";
-import "../LPTokenWrapper.sol";
+import "../IERC20Burnable.sol";
+import "../zeppelin/ReentrancyGuard.sol";
+import "../zeppelin/SafeERC20.sol";
+import "../SafeMath.sol";
+import "./Admin.sol";
 
+contract BoostVaultRewards is Admin, ReentrancyGuard, IVaultRewards {
+    using SafeMath for uint256;
+    using SafeERC20 for IERC20;
 
-contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
-    struct EpochRewards {
-        uint256 rewardsAvailable;
-        uint256 rewardsClaimed;
-        uint256 rewardPerToken;
+    /* ========== STATE VARIABLES ========== */
+
+    struct Reward {
+        mapping(address => bool) rewardDistributors;
+        uint256 rewardsDuration;
+        uint256 periodFinish;
+        uint256 rewardRate;
+        uint256 lastUpdateTime;
+        uint256 rewardPerTokenStored;
     }
 
-    IERC20 public boostToken;
-    IERC20 public want;
-    IController public controller;
-    address public gov;
-    
-    EpochRewards public previousEpoch;
-    EpochRewards public currentEpoch;
-    mapping(address => uint256) public previousEpochUserRewardPerTokenPaid;
-    mapping(address => uint256) public currentEpochUserRewardPerTokenPaid;
-    mapping(address => uint256) public previousEpochRewardsClaimable;
-    mapping(address => uint256) public currentEpochRewardsClaimable;
+    mapping(address => Reward) public rewardData;
+    address[] public rewardTokens;
 
-    uint256 public constant EPOCH_DURATION = 1 weeks;
-    uint256 public currentEpochTime;
-    uint256 public unclaimedRewards;
-    
-    // booster variables
-    // variables to keep track of totalSupply and balances (after accounting for multiplier)
-    uint256 public boostedTotalSupply;
-    uint256 public lastBoostPurchase; // timestamp of lastBoostPurchase
-    mapping(address => uint256) public boostedBalances;
+    // user -> reward token -> amount
+    mapping(address => mapping(address => uint256)) public userRewardPerTokenPaid;
+    mapping(address => mapping(address => uint256)) public rewards;
+
+    IERC20 public vaultToken;
+    IERC20 public boostToken;
+    address treasury;
+
+    uint256 private _boostedTotalSupply;
+    mapping(address => uint256) private _boostedBalances;
+
     mapping(address => uint256) public numBoostersBought; // each booster = 5% increase in stake amt
     mapping(address => uint256) public nextBoostPurchaseTime; // timestamp for which user is eligible to purchase another booster
-    mapping(address => uint256) public lastActionTime;
-
+    uint256 public lastBoostPurchase; // timestamp of last purchased boost
     uint256 public globalBoosterPrice = 1e18;
-    uint256 public constant SCALE_FACTOR = 125;
-    uint256 internal constant PRECISION = 1e18;
-    uint256 internal constant DENOM = 10000;
-    uint256 internal constant TREASURY_FEE = 250;
+    uint256 public boostThreshold = 10;
+    uint256 public boostScaleFactor = 20;
+    uint256 public scaleFactor = 320;
 
-    event RewardAdded(uint256 reward);
-    event RewardPaid(address indexed user, uint256 reward);
-
-    constructor(
-        IERC20 _stakeToken, // bf-token
-        IERC20 _boostToken,
-        IController _controller,
-        address _gov
-    ) public LPTokenWrapper(_stakeToken) {
+    constructor(IERC20 _boostToken, address _treasury) public {
         boostToken = _boostToken;
-        want = IVault(address(_stakeToken)).want();
-        controller = _controller;
-        gov = _gov;
-        currentEpochTime = controller.currentEpochTime();
-        lastBoostPurchase = block.timestamp;
+        treasury = _treasury;
     }
 
-    modifier onlyGov() {
-        require(msg.sender == gov, "not gov");
-        _;
+    function setVaultToken(IERC20 _vaultToken) external onlyAdmin {
+        vaultToken = _vaultToken;
     }
 
-    modifier updateEpochRewards() {
-        if (block.timestamp > currentEpochTime.add(EPOCH_DURATION)) {
-            currentEpochTime = currentEpochTime.add(EPOCH_DURATION);
-            // update unclaimed rewards
-            unclaimedRewards = unclaimedRewards.add(
-                previousEpoch.rewardsAvailable.sub(previousEpoch.rewardsClaimed)
-            );
-            // replace previous with current epoch
-            previousEpoch = currentEpoch;
-            // instantiate new epoch
-            currentEpoch = EpochRewards({
-                rewardsAvailable: 0,
-                rewardsClaimed: 0,
-                rewardPerToken: 0
-            }); 
-        }
-        _;
+    function setTreasury(address _treasury) external onlyAdmin {
+        treasury = _treasury;
     }
 
-    modifier stakeWithdrawTxCheck(address user) {
-        require(lastActionTime[user] != block.timestamp, "stake-withdraw same time");
+    function addRewardConfig(address _rewardsToken, uint256 _rewardsDuration) external onlyAdmin {
+        require(rewardData[_rewardsToken].rewardsDuration == 0);
+        rewardTokens.push(_rewardsToken);
+        rewardData[_rewardsToken].rewardsDuration = _rewardsDuration;
     }
 
-    function earned(address user) external view returns (uint256) {
-        return (block.timestamp > currentEpochTime.add(EPOCH_DURATION)) ?
-            _earned(user, true) :
-            _earned(user, false).add(_earned(user, true));
-    }
-
-    function setGovernance(address _gov) external onlyGov updateEpochRewards {
-        gov = _gov;
-    }
-  
-    function setController(IController _controller) external onlyGov updateEpochRewards {
-        controller = _controller;
-    }
-
-    function getReward(address user) external updateEpochRewards {
-        updateClaimUserRewardAndBooster(user);
-    }
-
-    function sendUnclaimedRewards() external updateEpochRewards {
-        uint256 pendingRewards = unclaimedRewards;
-        unclaimedRewards = 0;
-        want.safeTransfer(address(controller.vault(address(want))), pendingRewards);
-    }
-
-    function sendTreasuryBoost() external updateEpochRewards {
-        // transfer all collected boost tokens to treasury
-        uint256 boosterAmount = boostToken.balanceOf(address(this));
-        boostToken.safeApprove(address(controller.treasury()), boosterAmount);
-        controller.treasury().deposit(boostToken, boosterAmount);
-    }
-    
-    function boost() external updateEpochRewards {
-        require(
-            block.timestamp > nextBoostPurchaseTime[msg.sender],
-            "early boost purchase"
-        );
-        updateClaimUserRewardAndBooster(msg.sender);
-
-        // save current booster price, since transfer is done last
-        // since getBoosterPrice() returns new boost balance, avoid re-calculation
-        (uint256 boosterAmount, uint256 newBoostBalance) = getBoosterPrice(msg.sender);
-        // user's balance and boostedSupply will be changed in this function
-        applyBoost(msg.sender, newBoostBalance);
-        
-        boostToken.safeTransferFrom(msg.sender, address(this), boosterAmount);
-        // increase hurdle rate
-        controller.increaseHurdleRate(address(want));
-    }
-
-    // can only be called by vault (withdrawal fee) or approved strategy
-    // since funds are assumed to have been sent
-    function notifyRewardAmount(uint256 reward)
-        external
-        updateEpochRewards
+    function setScaleFactorsAndThreshold(
+        uint256 _boostThreshold,
+        uint256 _boostScaleFactor,
+        uint256 _scaleFactor
+    ) external onlyAdmin
     {
-        require(
-            msg.sender == address(stakeToken) ||
-            controller.approvedStrategies(address(want), msg.sender),
-            "!authorized"
-        );
+        boostThreshold = _boostThreshold;
+        boostScaleFactor = _boostScaleFactor;
+        scaleFactor = _scaleFactor;
+    }
 
-        // calc amt to be sent to treasury
-        uint256 treasuryAmount = reward.mul(TREASURY_FEE).div(DENOM);
+    function setRewardDistributor(
+        address _rewardsToken,
+        address[] calldata _rewardsDistributors,
+        bool[] calldata _authorized
+    ) external onlyAdmin {
+        require(_rewardsDistributors.length == _authorized.length, "bad length");
+        for (uint i; i < _rewardsDistributors.length; i++) {
+            rewardData[_rewardsToken].rewardDistributors[_rewardsDistributors[i]] = _authorized[i];
+        }
+    }
 
-        // distribute remaining fees
-        uint256 rewardAmountForDist = reward.sub(treasuryAmount);
-        currentEpoch.rewardsAvailable = currentEpoch.rewardsAvailable.add(rewardAmountForDist);
-        currentEpoch.rewardPerToken = currentEpoch.rewardPerToken.add(
-            (boostedTotalSupply == 0) ?
-            rewardAmountForDist :
-            rewardAmountForDist.mul(PRECISION).div(boostedTotalSupply) 
-        );
-        want.safeApprove(address(controller.treasury()), treasuryAmount);
-        controller.treasury().deposit(want, treasuryAmount);
-        emit RewardAdded(reward);
+    /* ========== VIEWS ========== */
+
+    function totalSupply() external view returns (uint256) {
+        return _boostedTotalSupply;
+    }
+
+    function balanceOf(address account) external view returns (uint256) {
+        return _boostedBalances[account];
+    }
+
+    function getRewardForDuration(address _rewardsToken) external view returns (uint256) {
+        return rewardData[_rewardsToken].rewardRate.mul(rewardData[_rewardsToken].rewardsDuration);
+    }
+
+    function lastTimeRewardApplicable(address _rewardsToken) public view returns (uint256) {
+        return Math.min(block.timestamp, rewardData[_rewardsToken].periodFinish);
+    }
+
+    function rewardPerToken(address _rewardsToken) public view returns (uint256) {
+        if (_boostedTotalSupply == 0) {
+            return rewardData[_rewardsToken].rewardPerTokenStored;
+        }
+        return
+            rewardData[_rewardsToken].rewardPerTokenStored.add(
+                lastTimeRewardApplicable(_rewardsToken)
+                    .sub(rewardData[_rewardsToken].lastUpdateTime)
+                    .mul(rewardData[_rewardsToken].rewardRate)
+                    .mul(1e18)
+                    .div(_boostedTotalSupply)
+            );
+    }
+
+    function earned(address account, address _rewardsToken) public view returns (uint256) {
+        return
+            _boostedBalances[account]
+                .mul(
+                rewardPerToken(_rewardsToken).sub(userRewardPerTokenPaid[account][_rewardsToken])
+            )
+                .div(1e18)
+                .add(rewards[account][_rewardsToken]);
     }
 
     function getBoosterPrice(address user)
         public view returns (uint256 boosterPrice, uint256 newBoostBalance)
     {
-        if (boostedTotalSupply == 0) return (0,0);
+        if (_boostedTotalSupply == 0) return (0,0);
 
         // 5% increase for each previously user-purchased booster
         uint256 boostersBought = numBoostersBought[user];
@@ -202,157 +162,156 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         // increment boostersBought by 1
         boostersBought = boostersBought.add(1);
 
+        // if no. of boosters exceed threshold, increase booster price by boostScaleFactor;
+        if (boostersBought >= boostThreshold) {
+            boosterPrice = boosterPrice
+                .mul((boostersBought.sub(boostThreshold)).mul(boostScaleFactor).add(100))
+                .div(100);
+        }
+
         // 2.5% decrease for every 2 hour interval since last global boost purchase
-        // max of 8 iterations
-        uint256 numIterations = (block.timestamp.sub(lastBoostPurchase)).div(2 hours);
-        numIterations = Math.min(8, numIterations);
-        boosterPrice = pow(boosterPrice, 975, 1000, numIterations);
+        boosterPrice = pow(boosterPrice, 975, 1000, (block.timestamp.sub(lastBoostPurchase)).div(2 hours));
 
         // adjust price based on expected increase in boost supply
         // boostersBought has been incremented by 1 already
-        newBoostBalance = balanceOf(user)
+        newBoostBalance = _boostedBalances[user]
             .mul(boostersBought.mul(5).add(100))
             .div(100);
-        uint256 boostBalanceIncrease = newBoostBalance.sub(boostedBalances[user]);
+        uint256 boostBalanceIncrease = newBoostBalance.sub(_boostedBalances[user]);
         boosterPrice = boosterPrice
             .mul(boostBalanceIncrease)
-            .mul(SCALE_FACTOR)
-            .div(boostedTotalSupply);
+            .mul(scaleFactor)
+            .div(_boostedTotalSupply);
     }
 
-    // stake visibility is public as overriding LPTokenWrapper's stake() function
-    function stake(uint256 amount) public updateEpochRewards stakeWithdrawTxCheck(msg.sender) {
-        require(amount > 0, "Cannot stake 0");
-        updateClaimUserRewardAndBooster(msg.sender);
-        super.stake(amount);
-
-        // previous boosters do not affect new amounts
-        boostedBalances[msg.sender] = boostedBalances[msg.sender].add(amount);
-        boostedTotalSupply = boostedTotalSupply.add(amount);
-        
-        // transfer token last, to follow CEI pattern
-        stakeToken.safeTransferFrom(msg.sender, address(this), amount);
+    /* ========== MUTATIVE FUNCTIONS ========== */
+    function updateStake(address user) external nonReentrant updateReward(msg.sender) {
+        require(msg.sender == address(vaultToken), "not authorized");
+        // update user boost balance and boost total supply
+        updateBoostBalanceAndSupply(user, 0, true);
     }
 
-    function withdraw(uint256 amount) public updateEpochRewards stakeWithdrawTxCheck(msg.sender) {
-        require(amount > 0, "Cannot withdraw 0");
-        updateClaimUserRewardAndBooster(msg.sender);
-        super.withdraw(amount);
-        
-        // update boosted balance and supply
-        updateBoostBalanceAndSupply(msg.sender, 0);
-        stakeToken.safeTransfer(msg.sender, amount);
+    function boost() external updateReward(msg.sender) {
+        require(block.timestamp > nextBoostPurchaseTime[msg.sender], "early boost purchase");
+
+        // save current booster price, since transfer is done last
+        // since getBoosterPrice() returns new boost balance, avoid re-calculation
+        (uint256 boosterAmount, uint256 newBoostBalance) = getBoosterPrice(msg.sender);
+        // user's balance and boostedSupply will be changed in this function
+        applyBoost(msg.sender, newBoostBalance);
+
+        getReward();
+
+        boostToken.safeTransferFrom(msg.sender, address(this), boosterAmount);
+
+        IERC20Burnable burnableBoostToken = IERC20Burnable(address(boostToken));
+
+        // burn 25%
+        uint256 burnAmount = boosterAmount.div(4);
+        burnableBoostToken.burn(burnAmount);
+        boosterAmount = boosterAmount.sub(burnAmount);
+
+        // transfer the rest to treasury (multisig)
+        boostToken.transfer(treasury, boosterAmount);
     }
 
-    // simpler withdraw method, in case rewards don't update properly
-    // does not claim rewards nor update user's lastActionTime
-    function emergencyWithdraw(uint256 amount) public stakeWithdrawTxCheck(msg.sender) {
-        super.withdraw(amount);
-        // reset numBoostersBought
-        numBoostersBought[msg.sender] = 0;
-        // update boosted balance and supply
-        updateBoostBalanceAndSupply(msg.sender, 0);
-        // transfer tokens to user
-        stakeToken.safeTransfer(msg.sender, amount);
+    function getReward() public nonReentrant updateReward(msg.sender) {
+        for (uint256 i; i < rewardTokens.length; i++) {
+            address _rewardsToken = rewardTokens[i];
+            uint256 reward = rewards[msg.sender][_rewardsToken];
+            if (reward > 0) {
+                rewards[msg.sender][_rewardsToken] = 0;
+                IERC20(_rewardsToken).safeTransfer(msg.sender, reward);
+                emit RewardPaid(msg.sender, _rewardsToken, reward);
+            }
+        }
     }
 
-    function exit() public updateEpochRewards {
-        withdraw(balanceOf(msg.sender));
+    /* ========== RESTRICTED FUNCTIONS ========== */
+    function notifyRewardAmount(address _rewardsToken, uint256 reward)
+        external
+        updateReward(address(0))
+    {
+        require(rewardData[_rewardsToken].rewardDistributors[msg.sender], "not authorized");
+        // handle the transfer of reward tokens via `transferFrom` to reduce the number
+        // of transactions required and ensure correctness of the reward amount
+        IERC20(_rewardsToken).safeTransferFrom(msg.sender, address(this), reward);
+
+        if (block.timestamp >= rewardData[_rewardsToken].periodFinish) {
+            rewardData[_rewardsToken].rewardRate = reward.div(
+                rewardData[_rewardsToken].rewardsDuration
+            );
+        } else {
+            uint256 remaining = rewardData[_rewardsToken].periodFinish.sub(block.timestamp);
+            uint256 leftover = remaining.mul(rewardData[_rewardsToken].rewardRate);
+            rewardData[_rewardsToken].rewardRate = reward.add(leftover).div(
+                rewardData[_rewardsToken].rewardsDuration
+            );
+        }
+
+        rewardData[_rewardsToken].lastUpdateTime = block.timestamp;
+        rewardData[_rewardsToken].periodFinish = block.timestamp.add(
+            rewardData[_rewardsToken].rewardsDuration
+        );
+        emit RewardAdded(reward);
     }
-    
-    function updateBoostBalanceAndSupply(address user, uint256 newBoostBalance) internal {
+
+    // Added to support recovering LP Rewards from other systems such as BAL to be distributed to holders
+    function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyAdmin {
+        require(tokenAddress != address(vaultToken), "Cannot withdraw staking token");
+        require(rewardData[tokenAddress].lastUpdateTime == 0, "Cannot withdraw reward token");
+        IERC20(tokenAddress).safeTransfer(admin, tokenAmount);
+        emit Recovered(tokenAddress, tokenAmount);
+    }
+
+    function setRewardsDuration(address _rewardsToken, uint256 _rewardsDuration) external {
+        require(rewardData[_rewardsToken].rewardDistributors[msg.sender], "not authorized");
+        require(
+            block.timestamp > rewardData[_rewardsToken].periodFinish,
+            "Reward period still active"
+        );
+        require(_rewardsDuration > 0, "Reward duration must be non-zero");
+        rewardData[_rewardsToken].rewardsDuration = _rewardsDuration;
+        emit RewardsDurationUpdated(_rewardsToken, rewardData[_rewardsToken].rewardsDuration);
+    }
+
+    /* ========== INTERNAL FUNCTIONS ========== */
+    function updateBoostBalanceAndSupply(
+        address user,
+        uint256 newBoostBalance,
+        bool calcBoostBal
+    ) internal {
         // subtract existing balance from boostedSupply
-        boostedTotalSupply = boostedTotalSupply.sub(boostedBalances[user]);
-    
-        // when applying boosts,
-        // newBoostBalance has already been calculated in getBoosterPrice()
-        if (newBoostBalance == 0) {
-            // each booster adds 5% to current stake amount
-            newBoostBalance = balanceOf(user).mul(numBoostersBought[user].mul(5).add(100)).div(100);
+        _boostedTotalSupply = _boostedTotalSupply.sub(_boostedBalances[user]);
+
+        if (calcBoostBal) {
+            // each booster adds 5% to current vault token amount
+            newBoostBalance = vaultToken
+                .balanceOf(user)
+                .mul(numBoostersBought[user].mul(5).add(100))
+                .div(100);
         }
 
         // update user's boosted balance
-        boostedBalances[user] = newBoostBalance;
-    
+        _boostedBalances[user] = newBoostBalance;
+
         // update boostedSupply
-        boostedTotalSupply = boostedTotalSupply.add(newBoostBalance);
-    }
-
-    function updateClaimUserRewardAndBooster(address user) internal {
-        if (lastActionTime[user] <= currentEpochTime) {
-            // reset previous epoch stats if user's last action exceeds 1 epoch
-            if (lastActionTime[user].add(EPOCH_DURATION) <= currentEpochTime) {
-                previousEpochRewardsClaimable[user] = 0;
-                previousEpochUserRewardPerTokenPaid[user] = 0;
-            }
-            // update user's claimable amount and booster count for the previous epoch
-            previousEpochRewardsClaimable[user] = _earned(user, false);
-            previousEpochUserRewardPerTokenPaid[user] = previousEpoch.rewardPerToken;
-            // reset current epoch stats
-            currentEpochRewardsClaimable[user] = 0;
-            currentEpochUserRewardPerTokenPaid[user] = 0;
-            // reset booster count
-            numBoostersBought[user] = 0;
-        }
-
-        // update user's claimable amount for current epoch
-        currentEpochRewardsClaimable[user] = _earned(user, true);
-        currentEpochUserRewardPerTokenPaid[user] = currentEpoch.rewardPerToken;
-        
-        // get reward claimable for previous epoch
-        previousEpoch.rewardsClaimed = previousEpoch.rewardsClaimed.add(previousEpochRewardsClaimable[user]);
-        uint256 reward = previousEpochRewardsClaimable[user];
-        previousEpochRewardsClaimable[user] = 0;
-
-        // get reward claimable for current epoch
-        currentEpoch.rewardsClaimed = currentEpoch.rewardsClaimed.add(currentEpochRewardsClaimable[user]);
-        reward = reward.add(currentEpochRewardsClaimable[user]);
-        currentEpochRewardsClaimable[user] = 0;
-
-        // update user's action timestamp
-        lastActionTime[user] = block.timestamp;
-
-        // finally, do transfer
-        if (reward > 0) {
-            want.safeTransfer(user, reward);
-            emit RewardPaid(user, reward);
-        }
+        _boostedTotalSupply = _boostedTotalSupply.add(newBoostBalance);
     }
 
     function applyBoost(address user, uint256 newBoostBalance) internal {
         // increase no. of boosters bought
         numBoostersBought[user] = numBoostersBought[user].add(1);
 
-        updateBoostBalanceAndSupply(user, newBoostBalance);
+        updateBoostBalanceAndSupply(user, newBoostBalance, false);
         
-        // increase next purchase eligibility by an hour
+        // increase user's next purchase eligibility by an hour
         nextBoostPurchaseTime[user] = block.timestamp.add(3600);
 
         // increase global booster price by 1%
         globalBoosterPrice = globalBoosterPrice.mul(101).div(100);
 
         lastBoostPurchase = block.timestamp;
-    }
-
-    function _earned(address account, bool isCurrentEpoch) internal view returns (uint256) {
-        uint256 rewardPerToken;
-        uint256 userRewardPerTokenPaid;
-        uint256 rewardsClaimable;
-        
-        if (isCurrentEpoch) {
-            rewardPerToken = currentEpoch.rewardPerToken;
-            userRewardPerTokenPaid = currentEpochUserRewardPerTokenPaid[account];
-            rewardsClaimable = currentEpochRewardsClaimable[account];
-        } else {
-            rewardPerToken = previousEpoch.rewardPerToken;
-            userRewardPerTokenPaid = previousEpochUserRewardPerTokenPaid[account];
-            rewardsClaimable = previousEpochRewardsClaimable[account];
-        }
-        return
-            boostedBalances[account]
-                .mul(rewardPerToken.sub(userRewardPerTokenPaid))
-                .div(1e18)
-                .add(rewardsClaimable);
     }
 
    /// Imported from: https://forum.openzeppelin.com/t/does-safemath-library-need-a-safe-power-function/871/7
@@ -365,7 +324,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         else if (exponent == 1) {
             return a.mul(b).div(c);
         }
-        else if (a == 0) {
+        else if (a == 0 && exponent != 0) {
             return 0;
         }
         else {
@@ -375,4 +334,25 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
             return z;
         }
     }
+
+    /* ========== MODIFIERS ========== */
+    modifier updateReward(address account) {
+        for (uint256 i; i < rewardTokens.length; i++) {
+            address token = rewardTokens[i];
+            rewardData[token].rewardPerTokenStored = rewardPerToken(token);
+            rewardData[token].lastUpdateTime = lastTimeRewardApplicable(token);
+            if (account != address(0)) {
+                rewards[account][token] = earned(account, token);
+                userRewardPerTokenPaid[account][token] = rewardData[token].rewardPerTokenStored;
+            }
+        }
+        _;
+    }
+
+    /* ========== EVENTS ========== */
+
+    event RewardAdded(uint256 reward);
+    event RewardPaid(address indexed user, address indexed rewardsToken, uint256 reward);
+    event RewardsDurationUpdated(address token, uint256 newDuration);
+    event Recovered(address token, uint256 amount);
 }

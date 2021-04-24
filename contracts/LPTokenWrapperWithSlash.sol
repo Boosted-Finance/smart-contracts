@@ -3,7 +3,6 @@ pragma solidity 0.5.17;
 import "./SafeMath.sol";
 import "./zeppelin/SafeERC20.sol";
 
-
 contract LPTokenWrapperWithSlash {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;

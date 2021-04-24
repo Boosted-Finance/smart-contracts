@@ -1,25 +1,25 @@
 //SPDX-License-Identifier: MIT
 /*
-* MIT License
-* ===========
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-*/
+ * MIT License
+ * ===========
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ */
 
 pragma solidity 0.5.17;
 
@@ -31,12 +31,11 @@ import "./ITreasury.sol";
 import "./ISwapRouter.sol";
 import "./LPTokenWrapperWithSlash.sol";
 
-
 contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
     IERC20 public stablecoin;
     ITreasury public treasury;
     SwapRouter public swapRouter;
-    
+
     // 1% = 100
     uint256 public constant MIN_QUORUM_PUNISHMENT = 500; // 5%
     uint256 public constant MIN_QUORUM_THRESHOLD = 3000; // 30%
@@ -44,7 +43,7 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
     uint256 public constant WITHDRAW_THRESHOLD = 1e21; // 1000 yCRV
 
     mapping(address => uint256) public voteLock; // timestamp that boost stakes are locked after voting
-    
+
     struct Proposal {
         address proposer;
         address withdrawAddress;
@@ -71,16 +70,17 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
     mapping(address => uint256) public rewards;
 
     // gov variables
-    mapping (uint256 => Proposal) public proposals;
+    mapping(uint256 => Proposal) public proposals;
     uint256 public proposalCount;
     uint256 public constant PROPOSAL_PERIOD = 2 days;
     uint256 public constant LOCK_PERIOD = 3 days;
     uint256 public constant MIN_BOOST_AMT = 1337e16; // 13.37 BOOST
 
-    constructor(IERC20 _stakeToken, ITreasury _treasury, SwapRouter _swapRouter)
-        public
-        LPTokenWrapperWithSlash(_stakeToken)
-    {
+    constructor(
+        IERC20 _stakeToken,
+        ITreasury _treasury,
+        SwapRouter _swapRouter
+    ) public LPTokenWrapperWithSlash(_stakeToken) {
         boostToken = _stakeToken;
         treasury = _treasury;
         swapRouter = _swapRouter;
@@ -99,10 +99,7 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
         _;
     }
 
-    function notifyRewardAmount(uint256 reward)
-        external
-        updateReward(address(0))
-    {
+    function notifyRewardAmount(uint256 reward) external updateReward(address(0)) {
         require(msg.sender == address(treasury), "!treasury");
         if (block.timestamp >= periodFinish) {
             rewardRate = reward.div(DURATION);
@@ -133,14 +130,14 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
             end: PROPOSAL_PERIOD.add(block.timestamp),
             url: _url,
             title: _title
-            });
+        });
         voteLock[msg.sender] = LOCK_PERIOD.add(block.timestamp);
         _getReward(msg.sender);
     }
 
     function voteFor(uint256 id) external updateReward(msg.sender) {
-        require(proposals[id].start < block.timestamp , "<start");
-        require(proposals[id].end > block.timestamp , ">end");
+        require(proposals[id].start < block.timestamp, "<start");
+        require(proposals[id].end > block.timestamp, ">end");
         require(proposals[id].againstVotes[msg.sender] == 0, "cannot switch votes");
         uint256 userVotes = Math.sqrt(balanceOf(msg.sender));
         uint256 votes = userVotes.sub(proposals[id].forVotes[msg.sender]);
@@ -152,8 +149,8 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
     }
 
     function voteAgainst(uint256 id) external updateReward(msg.sender) {
-        require(proposals[id].start < block.timestamp , "<start");
-        require(proposals[id].end > block.timestamp , ">end");
+        require(proposals[id].start < block.timestamp, "<start");
+        require(proposals[id].end > block.timestamp, ">end");
         require(proposals[id].forVotes[msg.sender] == 0, "cannot switch votes");
         uint256 userVotes = Math.sqrt(balanceOf(msg.sender));
         uint256 votes = userVotes.sub(proposals[id].againstVotes[msg.sender]);
@@ -183,17 +180,17 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
     function resolveProposal(uint256 id) public updateReward(msg.sender) {
         Proposal storage proposal = proposals[id];
         require(proposal.proposer != address(0), "non-existent proposal");
-        require(proposal.end < block.timestamp , "ongoing proposal");
+        require(proposal.end < block.timestamp, "ongoing proposal");
         require(proposal.totalSupply == 0, "already resolved");
 
         // update proposal total supply
         proposal.totalSupply = Math.sqrt(totalSupply());
 
         // sum votes, multiply by precision, divide by square rooted total supply
-        uint256 quorum = 
-            (proposal.totalForVotes.add(proposal.totalAgainstVotes))
-            .mul(PERCENTAGE_PRECISION)
-            .div(proposal.totalSupply);
+        uint256 quorum =
+            (proposal.totalForVotes.add(proposal.totalAgainstVotes)).mul(PERCENTAGE_PRECISION).div(
+                proposal.totalSupply
+            );
 
         if ((quorum < MIN_QUORUM_PUNISHMENT) && proposal.withdrawAmount > WITHDRAW_THRESHOLD) {
             // user's stake gets slashed, converted to stablecoin and sent to treasury
@@ -202,12 +199,9 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
         } else if (
             (quorum > MIN_QUORUM_THRESHOLD) &&
             (proposal.totalForVotes > proposal.totalAgainstVotes)
-         ) {
+        ) {
             // treasury to send funds to proposal
-            treasury.withdraw(
-                proposal.withdrawAmount,
-                proposal.withdrawAddress
-            );
+            treasury.withdraw(proposal.withdrawAmount, proposal.withdrawAddress);
         }
     }
 
@@ -221,11 +215,9 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
         }
         return
             rewardPerTokenStored.add(
-                lastTimeRewardApplicable()
-                    .sub(lastUpdateTime)
-                    .mul(rewardRate)
-                    .mul(1e18)
-                    .div(totalSupply())
+                lastTimeRewardApplicable().sub(lastUpdateTime).mul(rewardRate).mul(1e18).div(
+                    totalSupply()
+                )
             );
     }
 
@@ -236,19 +228,20 @@ contract BoostGovV2 is IGov, LPTokenWrapperWithSlash {
                 .div(1e18)
                 .add(rewards[account]);
     }
-    
+
     function convertAndSendTreasuryFunds(uint256 amount) internal {
         address[] memory routeDetails = new address[](3);
         routeDetails[0] = address(stakeToken);
         routeDetails[1] = swapRouter.WETH();
         routeDetails[2] = address(stablecoin);
-        uint[] memory amounts = swapRouter.swapExactTokensForTokens(
-            amount,
-            0,
-            routeDetails,
-            address(this),
-            block.timestamp + 100
-        );
+        uint256[] memory amounts =
+            swapRouter.swapExactTokensForTokens(
+                amount,
+                0,
+                routeDetails,
+                address(this),
+                block.timestamp + 100
+            );
         // 0 = input token amt, 1 = weth output amt, 2 = stablecoin output amt
         treasury.deposit(stablecoin, amounts[2]);
     }

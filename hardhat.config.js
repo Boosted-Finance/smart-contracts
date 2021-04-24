@@ -1,12 +1,12 @@
-usePlugin("@nomiclabs/buidler-truffle5");
-usePlugin("@nomiclabs/buidler-web3");
-usePlugin("@nomiclabs/buidler-etherscan");
+require("@nomiclabs/hardhat-truffle5");
+require("@nomiclabs/hardhat-ethers");
+require("@nomiclabs/hardhat-web3");
+require("@nomiclabs/hardhat-etherscan");
 
 require('./scripts/bVaults');
 require('dotenv').config();
 
 module.exports = {
-  defaultNetwork: 'buidlerevm',
   networks: {
     kovan: {
       url: `https://kovan.infura.io/v3/${process.env.INFURA_API_KEY}`,
@@ -19,16 +19,16 @@ module.exports = {
       timeout: 20000
     }
   },
-  solc: {
-    version: "0.5.17",
-    optimizer: {
-      enabled: true,
-      runs: 10000
-    }
-  },
-  etherscan: {
-    url: "https://api-kovan.etherscan.io/api",
-    apiKey: process.env.ETHERSCAN_API_KEY
+  solidity: {
+    compilers: [
+      {
+        version: "0.5.17",
+        optimizer: {
+          enabled: true,
+          runs: 100000
+        }
+      }
+    ]
   },
   paths: {
     sources: './contracts',

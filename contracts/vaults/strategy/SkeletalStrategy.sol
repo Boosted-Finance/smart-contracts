@@ -24,40 +24,31 @@
 pragma solidity 0.5.17;
 
 import "../IStrategy.sol";
-import "../IController.sol";
+import "../IVault.sol";
+import "../IVaultRewards.sol";
+import "../Admin.sol";
 import "../../SafeMath.sol";
 import "../../zeppelin/SafeERC20.sol";
 
 // To implement a strategy, kindly implement all TODOs
 // This contract can either be inherited or modified
-contract SkeletalStrategy is IStrategy {
+contract SkeletalStrategy is Admin, IStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
-    uint256 public constant PERFORMANCE_FEE = 500; // 5%
-    uint256 public constant DENOM = 10000;
-    uint256 public hurdleLastUpdateTime;
-    uint256 public harvestAmountThisEpoch;
-    uint256 public strategistCollectedFee;
-    IERC20 public want; // should be set only in constructor
-    IController public controller; // should be set only in constructor
-    address public strategist; // mutable, but only by strategist
+    IVault public vault; // should be set only in constructor
+    IVaultRewards public vaultRewards; // should be set only in constructor
+    IERC20 public want; // should be derived from vault
 
-    // want must be equal to an underlying vault token (Eg. USDC)
-    constructor(IController _controller, IERC20 _want) public {
-        controller = _controller;
-        strategist = msg.sender;
-        want = _want;
+    constructor(IVault _vault, IVaultRewards _vaultRewards) public {
+        vault = _vault;
+        vaultRewards = _vaultRewards;
+        want = vault.want();
     }
 
-    modifier onlyStrategist() {
-        require(msg.sender == strategist, "!strategist");
-        _;
-    }
-
-    modifier onlyController() {
-        require(msg.sender == address(controller), "!controller");
+    modifier onlyVault() {
+        require(msg.sender == address(vault), "!vault");
         _;
     }
 
@@ -66,93 +57,45 @@ contract SkeletalStrategy is IStrategy {
         return "SkeletalStrategy";
     }
 
-    function setStrategist(address _strategist) external onlyStrategist {
-        strategist = _strategist;
-    }
-
-    // TODO: Customise this method, as long as it calls controller.earn()
+    // TODO: Customise this method, as long as it calls vault.transferFundsToStrategy
     // and does something with the funds
     // Example: Calc fund availability, then send it all to this contract
     function deposit() public {
-        uint256 availFunds = controller.vault(address(want)).availableFunds();
-        availFunds = Math.min(availFunds, controller.allowableAmount(address(this)));
-        controller.earn(address(this), availFunds);
+        uint256 availFunds = vault.availableFunds();
+        vault.transferFundsToStrategy(availFunds);
         // TODO: funds would be sent here.. convert to desired token (if needed) for investment
     }
 
     // TODO: Implement this, should return amount invested
     function balanceOf() external view returns (uint256);
 
-    function withdraw(address token) external onlyController {
+    // admin should be a multisig
+    // will withdraw to admin
+    function emergencyWithdraw(address token) external onlyAdmin {
         IERC20 erc20Token = IERC20(token);
         require(erc20Token != want, "want");
         // TODO: should exclude more tokens, such as the farmed token
         // and other intermediary tokens used
-        erc20Token.safeTransfer(address(controller), erc20Token.balanceOf(address(this)));
+        erc20Token.safeTransfer(admin, erc20Token.balanceOf(address(this)));
     }
 
-    function withdraw(uint256 amount) external onlyController {
+    function withdraw(uint256 amount) external onlyVault {
         // TODO: process the withdrawal
 
         // send funds to vault
-        want.safeTransfer(address(controller.vault(address(want))), amount);
+        want.safeTransfer(address(vault), amount);
     }
 
-    function withdrawAll() external returns (uint256 balance) onlyController {
-        // TODO: process the withdrawal
-        
-        // exclude collected strategist fee
-        balance = want.balanceOf(address(this)).sub(strategistCollectedFee);
+    function withdrawAll() external onlyVault returns (uint256 balance) {
+        // TODO: exit from strategy, withdraw all funds
+
         // send funds to vault
-        want.safeTransfer(address(controller.vault(address(want))), balance);
+        want.safeTransfer(address(vault), want.balanceOf(address(this)));
     }
 
+    // left up to implementation
     function harvest() external {
         // TODO: collect farmed tokens and sell for want token
-
-        uint256 remainingWantAmount = want.balanceOf(address(this)).sub(strategistCollectedFee);
-        uint256 vaultRewardPercentage;
-        uint256 hurdleAmount;
-        uint256 harvestPercentage;
-        uint256 epochTime;
-        (vaultRewardPercentage, hurdleAmount, harvestPercentage) = 
-            controller.getHarvestInfo(address(this), msg.sender);
-
-        // check if harvest amount has to be reset
-        if (hurdleLastUpdateTime < epochTime) {
-            // reset collected amount
-            harvestAmountThisEpoch = 0;
-        }
-        // update variables
-        hurdleLastUpdateTime = block.timestamp;
-        harvestAmountThisEpoch = harvestAmountThisEpoch.add(remainingWantAmount);
-
-        // first, take harvester fee
-        uint256 harvestFee = remainingWantAmount.mul(harvestPercentage).div(DENOM);
-        want.safeTransfer(msg.sender, harvestFee);
-
-        uint256 fee;
-        // then, if hurdle amount has been exceeded, take performance fee
-        if (harvestAmountThisEpoch >= hurdleAmount) {
-            fee = remainingWantAmount.mul(PERFORMANCE_FEE).div(DENOM);
-            strategistCollectedFee = strategistCollectedFee.add(fee);
-        }
-        
-        // do the subtraction of harvester and strategist fees
-        remainingWantAmount = remainingWantAmount.sub(harvestFee).sub(fee);
-
-        // finally, calculate how much is to be re-invested
-        // fee = vault reward amount, reusing variable
-        fee = remainingWantAmount.mul(vaultRewardPercentage).div(DENOM);
-        want.safeTransfer(address(controller.rewards(address(want))), fee);
-        controller.rewards(address(want)).notifyRewardAmount(fee);
-        remainingWantAmount = remainingWantAmount.sub(fee);
-
-        // TODO: finally, use remaining want amount for reinvestment
-    }
-
-    function withdrawStrategistFee() external {
-        strategistCollectedFee = 0;
-        want.safeTransfer(strategist, strategistCollectedFee);
+        // send some to vault rewards
     }
 }
