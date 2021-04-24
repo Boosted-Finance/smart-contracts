@@ -74,7 +74,7 @@ contract SkeletalStrategy is Admin, IStrategy {
     function emergencyWithdraw(address token) external onlyAdmin {
         IERC20 erc20Token = IERC20(token);
         require(erc20Token != want, "want");
-        // TODO: should exclude more tokens, such as the farmed token
+        // TODO: consider excluding more tokens, such as the farmed token
         // and other intermediary tokens used
         erc20Token.safeTransfer(admin, erc20Token.balanceOf(address(this)));
     }
