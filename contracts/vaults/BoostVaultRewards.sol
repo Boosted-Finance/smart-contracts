@@ -304,7 +304,7 @@ contract BoostVaultRewards is Admin, ReentrancyGuard, IVaultRewards {
         numBoostersBought[user] = numBoostersBought[user].add(1);
 
         updateBoostBalanceAndSupply(user, newBoostBalance, false);
-        
+
         // increase user's next purchase eligibility by an hour
         nextBoostPurchaseTime[user] = block.timestamp.add(3600);
 
@@ -316,7 +316,7 @@ contract BoostVaultRewards is Admin, ReentrancyGuard, IVaultRewards {
 
    /// Imported from: https://forum.openzeppelin.com/t/does-safemath-library-need-a-safe-power-function/871/7
    /// Modified so that it takes in 3 arguments for base
-   /// @return a * (b / c)^exponent 
+   /// @return a * (b / c)^exponent
    function pow(uint256 a, uint256 b, uint256 c, uint256 exponent) internal pure returns (uint256) {
         if (exponent == 0) {
             return a;

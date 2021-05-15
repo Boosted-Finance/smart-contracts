@@ -90,7 +90,8 @@ contract SkeletalStrategy is Admin, IStrategy {
         // TODO: exit from strategy, withdraw all funds
 
         // send funds to vault
-        want.safeTransfer(address(vault), want.balanceOf(address(this)));
+        balance = want.balanceOf(address(this));
+        want.safeTransfer(address(vault), balance);
     }
 
     // left up to implementation
