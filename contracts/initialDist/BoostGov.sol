@@ -1,25 +1,25 @@
 //SPDX-License-Identifier: MIT
 /*
-* MIT License
-* ===========
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-*/
+ * MIT License
+ * ===========
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ */
 
 pragma solidity ^0.5.17;
 
@@ -77,7 +77,11 @@ library SafeMath {
      *
      * _Available since v2.4.0._
      */
-    function sub(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+    function sub(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
         require(b <= a, errorMessage);
         uint256 c = a - b;
 
@@ -135,7 +139,11 @@ library SafeMath {
      *
      * _Available since v2.4.0._
      */
-    function div(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+    function div(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
         // Solidity only automatically asserts when dividing by 0
         require(b > 0, errorMessage);
         uint256 c = a / b;
@@ -172,12 +180,15 @@ library SafeMath {
      *
      * _Available since v2.4.0._
      */
-    function mod(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+    function mod(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
         require(b != 0, errorMessage);
         return a % b;
     }
 }
-
 
 pragma solidity ^0.5.17;
 
@@ -239,7 +250,11 @@ interface IERC20 {
      *
      * Emits a {Transfer} event.
      */
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
 
     /**
      * @dev Emitted when `value` tokens are moved from one account (`from`) to
@@ -286,7 +301,9 @@ library Address {
         bytes32 codehash;
         bytes32 accountHash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470;
         // solhint-disable-next-line no-inline-assembly
-        assembly { codehash := extcodehash(account) }
+        assembly {
+            codehash := extcodehash(account)
+        }
         return (codehash != 0x0 && codehash != accountHash);
     }
 
@@ -331,9 +348,6 @@ library Address {
 
 pragma solidity ^0.5.0;
 
-
-
-
 /**
  * @title SafeERC20
  * @dev Wrappers around ERC20 operations that throw on failure (when the token
@@ -347,33 +361,68 @@ library SafeERC20 {
     using SafeMath for uint256;
     using Address for address;
 
-    function safeTransfer(IERC20 token, address to, uint256 value) internal {
+    function safeTransfer(
+        IERC20 token,
+        address to,
+        uint256 value
+    ) internal {
         callOptionalReturn(token, abi.encodeWithSelector(token.transfer.selector, to, value));
     }
 
-    function safeTransferFrom(IERC20 token, address from, address to, uint256 value) internal {
-        callOptionalReturn(token, abi.encodeWithSelector(token.transferFrom.selector, from, to, value));
+    function safeTransferFrom(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 value
+    ) internal {
+        callOptionalReturn(
+            token,
+            abi.encodeWithSelector(token.transferFrom.selector, from, to, value)
+        );
     }
 
-    function safeApprove(IERC20 token, address spender, uint256 value) internal {
+    function safeApprove(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
         // safeApprove should only be called when setting an initial allowance,
         // or when resetting it to zero. To increase and decrease it, use
         // 'safeIncreaseAllowance' and 'safeDecreaseAllowance'
         // solhint-disable-next-line max-line-length
-        require((value == 0) || (token.allowance(address(this), spender) == 0),
+        require(
+            (value == 0) || (token.allowance(address(this), spender) == 0),
             "SafeERC20: approve from non-zero to non-zero allowance"
         );
         callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, value));
     }
 
-    function safeIncreaseAllowance(IERC20 token, address spender, uint256 value) internal {
+    function safeIncreaseAllowance(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
         uint256 newAllowance = token.allowance(address(this), spender).add(value);
-        callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, newAllowance));
+        callOptionalReturn(
+            token,
+            abi.encodeWithSelector(token.approve.selector, spender, newAllowance)
+        );
     }
 
-    function safeDecreaseAllowance(IERC20 token, address spender, uint256 value) internal {
-        uint256 newAllowance = token.allowance(address(this), spender).sub(value, "SafeERC20: decreased allowance below zero");
-        callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, newAllowance));
+    function safeDecreaseAllowance(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
+        uint256 newAllowance =
+            token.allowance(address(this), spender).sub(
+                value,
+                "SafeERC20: decreased allowance below zero"
+            );
+        callOptionalReturn(
+            token,
+            abi.encodeWithSelector(token.approve.selector, spender, newAllowance)
+        );
     }
 
     /**
@@ -397,7 +446,8 @@ library SafeERC20 {
         (bool success, bytes memory returndata) = address(token).call(data);
         require(success, "SafeERC20: low-level call failed");
 
-        if (returndata.length > 0) { // Return data is optional
+        if (returndata.length > 0) {
+            // Return data is optional
             // solhint-disable-next-line max-line-length
             require(abi.decode(returndata, (bool)), "SafeERC20: ERC20 operation did not succeed");
         }
@@ -448,12 +498,13 @@ contract LPTokenWrapperWithSlash {
 
 interface UniswapRouter {
     function WETH() external pure returns (address);
+
     function swapExactTokensForTokens(
-      uint256 amountIn,
-      uint256 amountOutMin,
-      address[] calldata path,
-      address to,
-      uint256 deadline
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
     ) external returns (uint256[] memory amounts);
 }
 
@@ -461,11 +512,10 @@ interface IGovernance {
     function getStablecoin() external view returns (address);
 }
 
-
 contract BoostGov is LPTokenWrapperWithSlash, IGovernance {
     IERC20 public stablecoin;
     UniswapRouter public uniswapRouter;
-    
+
     // 1% = 100
     uint256 public constant MIN_QUORUM_PUNISHMENT = 500; // 5%
     uint256 public constant MIN_QUORUM_THRESHOLD = 3000; // 30%
@@ -473,7 +523,7 @@ contract BoostGov is LPTokenWrapperWithSlash, IGovernance {
     uint256 public WITHDRAW_THRESHOLD = 1e21; // 1000 yCRV
 
     mapping(address => uint256) public voteLock; // period that your stake it locked to keep it for voting
-    
+
     struct Proposal {
         address proposer;
         uint256 withdrawAmount;
@@ -488,16 +538,17 @@ contract BoostGov is LPTokenWrapperWithSlash, IGovernance {
         string url; // url
     }
 
-    mapping (uint256 => Proposal) public proposals;
+    mapping(uint256 => Proposal) public proposals;
     uint256 public proposalCount;
     uint256 public proposalPeriod = 2 days;
     uint256 public lockPeriod = 3 days;
     uint256 public minimum = 1337e16; // 13.37 BOOST
 
-    constructor(IERC20 _stakeToken, IERC20 _stablecoin, UniswapRouter _uniswapRouter)
-        public
-        LPTokenWrapperWithSlash(_stakeToken)
-    {
+    constructor(
+        IERC20 _stakeToken,
+        IERC20 _stablecoin,
+        UniswapRouter _uniswapRouter
+    ) public LPTokenWrapperWithSlash(_stakeToken) {
         stablecoin = _stablecoin;
         stakeToken.safeApprove(address(_uniswapRouter), uint256(-1));
         uniswapRouter = _uniswapRouter;
@@ -523,13 +574,13 @@ contract BoostGov is LPTokenWrapperWithSlash, IGovernance {
             start: block.timestamp,
             end: proposalPeriod.add(block.timestamp),
             url: _url
-            });
+        });
         voteLock[msg.sender] = lockPeriod.add(block.timestamp);
     }
 
     function voteFor(uint256 id) public {
-        require(proposals[id].start < block.timestamp , "<start");
-        require(proposals[id].end > block.timestamp , ">end");
+        require(proposals[id].start < block.timestamp, "<start");
+        require(proposals[id].end > block.timestamp, ">end");
         require(proposals[id].againstVotes[msg.sender] == 0, "cannot switch votes");
         uint256 votes = balanceOf(msg.sender).sub(proposals[id].forVotes[msg.sender]);
         proposals[id].totalForVotes = proposals[id].totalForVotes.add(votes);
@@ -539,8 +590,8 @@ contract BoostGov is LPTokenWrapperWithSlash, IGovernance {
     }
 
     function voteAgainst(uint256 id) public {
-        require(proposals[id].start < block.timestamp , "<start");
-        require(proposals[id].end > block.timestamp , ">end");
+        require(proposals[id].start < block.timestamp, "<start");
+        require(proposals[id].end > block.timestamp, ">end");
         require(proposals[id].forVotes[msg.sender] == 0, "cannot switch votes");
         uint256 votes = balanceOf(msg.sender).sub(proposals[id].againstVotes[msg.sender]);
         proposals[id].totalAgainstVotes = proposals[id].totalAgainstVotes.add(votes);
@@ -560,17 +611,19 @@ contract BoostGov is LPTokenWrapperWithSlash, IGovernance {
 
     function resolveProposal(uint256 id) public {
         require(proposals[id].proposer != address(0), "non-existent proposal");
-        require(proposals[id].end < block.timestamp , "ongoing proposal");
+        require(proposals[id].end < block.timestamp, "ongoing proposal");
         require(!proposals[id].hasResolved, "already resolved");
 
         // sum votes, multiply by precision, divide by total supply
-        uint256 quorum = 
+        uint256 quorum =
             (proposals[id].totalForVotes.add(proposals[id].totalAgainstVotes))
-            .mul(PERCENTAGE_PRECISION)
-            .div(totalSupply());
+                .mul(PERCENTAGE_PRECISION)
+                .div(totalSupply());
 
         proposals[id].hasResolved = true;
-        if ((quorum < MIN_QUORUM_PUNISHMENT) && proposals[id].withdrawAmount > WITHDRAW_THRESHOLD) {
+        if (
+            (quorum < MIN_QUORUM_PUNISHMENT) && proposals[id].withdrawAmount > WITHDRAW_THRESHOLD
+        ) {
             // user's stake gets slashed, converted to stablecoin
             uint256 amount = slash(proposals[id].proposer);
             address[] memory routeDetails = new address[](3);
@@ -587,7 +640,7 @@ contract BoostGov is LPTokenWrapperWithSlash, IGovernance {
         } else if (
             (quorum > MIN_QUORUM_THRESHOLD) &&
             (proposals[id].totalForVotes > proposals[id].totalAgainstVotes)
-         ) {
+        ) {
             // send funds to withdraw address
             if (stablecoin.balanceOf(address(this)) >= proposals[id].withdrawAmount) {
                 stablecoin.safeTransfer(

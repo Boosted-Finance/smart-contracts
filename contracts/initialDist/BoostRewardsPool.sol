@@ -1,25 +1,25 @@
 //SPDX-License-Identifier: MIT
 /*
-* MIT License
-* ===========
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-*/
+ * MIT License
+ * ===========
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ */
 
 pragma solidity ^0.5.17;
 
@@ -47,7 +47,7 @@ library Math {
      */
     function average(uint256 a, uint256 b) internal pure returns (uint256) {
         // (a + b) / 2 can overflow, so we distribute
-        return (a / 2) + (b / 2) + ((a % 2 + b % 2) / 2);
+        return (a / 2) + (b / 2) + (((a % 2) + (b % 2)) / 2);
     }
 }
 
@@ -107,7 +107,11 @@ library SafeMath {
      *
      * _Available since v2.4.0._
      */
-    function sub(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+    function sub(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
         require(b <= a, errorMessage);
         uint256 c = a - b;
 
@@ -165,7 +169,11 @@ library SafeMath {
      *
      * _Available since v2.4.0._
      */
-    function div(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+    function div(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
         // Solidity only automatically asserts when dividing by 0
         require(b > 0, errorMessage);
         uint256 c = a / b;
@@ -202,7 +210,11 @@ library SafeMath {
      *
      * _Available since v2.4.0._
      */
-    function mod(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+    function mod(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
         require(b != 0, errorMessage);
         return a % b;
     }
@@ -223,7 +235,8 @@ pragma solidity ^0.5.17;
 contract Context {
     // Empty internal constructor, to prevent people from mistakenly deploying
     // an instance of this contract, which should be used via inheritance.
-    constructor () internal { }
+    constructor() internal {}
+
     // solhint-disable-previous-line no-empty-blocks
 
     function _msgSender() internal view returns (address payable) {
@@ -255,7 +268,7 @@ contract Ownable is Context {
     /**
      * @dev Initializes the contract setting the deployer as the initial owner.
      */
-    constructor () internal {
+    constructor() internal {
         _owner = _msgSender();
         emit OwnershipTransferred(address(0), _owner);
     }
@@ -372,7 +385,11 @@ interface IERC20 {
      *
      * Emits a {Transfer} event.
      */
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
 
     /**
      * @dev Emitted when `value` tokens are moved from one account (`from`) to
@@ -391,12 +408,23 @@ interface IERC20 {
 
 interface IERC20Burnable {
     function totalSupply() external view returns (uint256);
+
     function balanceOf(address account) external view returns (uint256);
+
     function transfer(address recipient, uint256 amount) external returns (bool);
+
     function allowance(address owner, address spender) external view returns (uint256);
+
     function approve(address spender, uint256 amount) external returns (bool);
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
+
     function burn(uint256 amount) external;
+
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
@@ -429,7 +457,9 @@ library Address {
         bytes32 codehash;
         bytes32 accountHash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470;
         // solhint-disable-next-line no-inline-assembly
-        assembly { codehash := extcodehash(account) }
+        assembly {
+            codehash := extcodehash(account)
+        }
         return (codehash != 0x0 && codehash != accountHash);
     }
 
@@ -472,7 +502,6 @@ library Address {
 
 pragma solidity ^0.5.17;
 
-
 /**
  * @title SafeERC20
  * @dev Wrappers around ERC20 operations that throw on failure (when the token
@@ -486,33 +515,68 @@ library SafeERC20 {
     using SafeMath for uint256;
     using Address for address;
 
-    function safeTransfer(IERC20 token, address to, uint256 value) internal {
+    function safeTransfer(
+        IERC20 token,
+        address to,
+        uint256 value
+    ) internal {
         callOptionalReturn(token, abi.encodeWithSelector(token.transfer.selector, to, value));
     }
 
-    function safeTransferFrom(IERC20 token, address from, address to, uint256 value) internal {
-        callOptionalReturn(token, abi.encodeWithSelector(token.transferFrom.selector, from, to, value));
+    function safeTransferFrom(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 value
+    ) internal {
+        callOptionalReturn(
+            token,
+            abi.encodeWithSelector(token.transferFrom.selector, from, to, value)
+        );
     }
 
-    function safeApprove(IERC20 token, address spender, uint256 value) internal {
+    function safeApprove(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
         // safeApprove should only be called when setting an initial allowance,
         // or when resetting it to zero. To increase and decrease it, use
         // 'safeIncreaseAllowance' and 'safeDecreaseAllowance'
         // solhint-disable-next-line max-line-length
-        require((value == 0) || (token.allowance(address(this), spender) == 0),
+        require(
+            (value == 0) || (token.allowance(address(this), spender) == 0),
             "SafeERC20: approve from non-zero to non-zero allowance"
         );
         callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, value));
     }
 
-    function safeIncreaseAllowance(IERC20 token, address spender, uint256 value) internal {
+    function safeIncreaseAllowance(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
         uint256 newAllowance = token.allowance(address(this), spender).add(value);
-        callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, newAllowance));
+        callOptionalReturn(
+            token,
+            abi.encodeWithSelector(token.approve.selector, spender, newAllowance)
+        );
     }
 
-    function safeDecreaseAllowance(IERC20 token, address spender, uint256 value) internal {
-        uint256 newAllowance = token.allowance(address(this), spender).sub(value, "SafeERC20: decreased allowance below zero");
-        callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, newAllowance));
+    function safeDecreaseAllowance(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
+        uint256 newAllowance =
+            token.allowance(address(this), spender).sub(
+                value,
+                "SafeERC20: decreased allowance below zero"
+            );
+        callOptionalReturn(
+            token,
+            abi.encodeWithSelector(token.approve.selector, spender, newAllowance)
+        );
     }
 
     /**
@@ -536,7 +600,8 @@ library SafeERC20 {
         (bool success, bytes memory returndata) = address(token).call(data);
         require(success, "SafeERC20: low-level call failed");
 
-        if (returndata.length > 0) { // Return data is optional
+        if (returndata.length > 0) {
+            // Return data is optional
             // solhint-disable-next-line max-line-length
             require(abi.decode(returndata, (bool)), "SafeERC20: ERC20 operation did not succeed");
         }
@@ -544,7 +609,6 @@ library SafeERC20 {
 }
 
 pragma solidity ^0.5.17;
-
 
 contract LPTokenWrapper {
     using SafeMath for uint256;
@@ -582,13 +646,14 @@ contract LPTokenWrapper {
 
 interface UniswapRouter {
     function WETH() external pure returns (address);
+
     function swapExactTokensForTokens(
-      uint amountIn,
-      uint amountOutMin,
-      address[] calldata path,
-      address to,
-      uint deadline
-    ) external returns (uint[] memory amounts);
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
 }
 
 interface IGovernance {
@@ -601,7 +666,7 @@ contract BoostRewardsPool is LPTokenWrapper, Ownable {
     address public governanceSetter;
     UniswapRouter public uniswapRouter;
     address public stablecoin;
-    
+
     uint256 public constant MAX_NUM_BOOSTERS = 5;
     uint256 public tokenCapAmount;
     uint256 public starttime;
@@ -612,7 +677,7 @@ contract BoostRewardsPool is LPTokenWrapper, Ownable {
     uint256 public rewardPerTokenStored;
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
-    
+
     // booster variables
     // variables to keep track of totalSupply and balances (after accounting for multiplier)
     uint256 public boostedTotalSupply;
@@ -626,7 +691,7 @@ contract BoostRewardsPool is LPTokenWrapper, Ownable {
     event RewardPaid(address indexed user, uint256 reward);
 
     modifier checkStart() {
-        require(block.timestamp >= starttime,"not start");
+        require(block.timestamp >= starttime, "not start");
         _;
     }
 
@@ -657,7 +722,7 @@ contract BoostRewardsPool is LPTokenWrapper, Ownable {
         starttime = _starttime;
         duration = _duration;
     }
-    
+
     function lastTimeRewardApplicable() public view returns (uint256) {
         return Math.min(block.timestamp, periodFinish);
     }
@@ -668,11 +733,9 @@ contract BoostRewardsPool is LPTokenWrapper, Ownable {
         }
         return
             rewardPerTokenStored.add(
-                lastTimeRewardApplicable()
-                    .sub(lastUpdateTime)
-                    .mul(rewardRate)
-                    .mul(1e18)
-                    .div(boostedTotalSupply)
+                lastTimeRewardApplicable().sub(lastUpdateTime).mul(rewardRate).mul(1e18).div(
+                    boostedTotalSupply
+                )
             );
     }
 
@@ -697,7 +760,7 @@ contract BoostRewardsPool is LPTokenWrapper, Ownable {
 
         // update boosted balance and supply
         updateBoostBalanceAndSupply(msg.sender);
-        
+
         // transfer token last, to follow CEI pattern
         stakeToken.safeTransferFrom(msg.sender, address(this), amount);
     }
@@ -705,10 +768,10 @@ contract BoostRewardsPool is LPTokenWrapper, Ownable {
     function withdraw(uint256 amount) public updateReward(msg.sender) checkStart {
         require(amount > 0, "Cannot withdraw 0");
         super.withdraw(amount);
-        
+
         // update boosted balance and supply
         updateBoostBalanceAndSupply(msg.sender);
-        
+
         stakeToken.safeTransfer(msg.sender, amount);
     }
 
@@ -725,18 +788,18 @@ contract BoostRewardsPool is LPTokenWrapper, Ownable {
             emit RewardPaid(msg.sender, reward);
         }
     }
-    
+
     function boost() external updateReward(msg.sender) checkStart {
         require(
             // 2 days after starttime
             block.timestamp > starttime.add(172800) &&
-            block.timestamp > nextBoostPurchaseTime[msg.sender],
+                block.timestamp > nextBoostPurchaseTime[msg.sender],
             "early boost purchase"
         );
-        
+
         // increase next purchase eligibility by an hour
         nextBoostPurchaseTime[msg.sender] = block.timestamp.add(3600);
-        
+
         // increase no. of boosters bought
         uint256 booster = numBoostersBought[msg.sender].add(1);
         numBoostersBought[msg.sender] = booster;
@@ -746,12 +809,12 @@ contract BoostRewardsPool is LPTokenWrapper, Ownable {
         booster = boosterPrice;
         // increase next booster price by 5%
         boosterPrice = boosterPrice.mul(105).div(100);
-        
+
         // update boosted balance and supply
         updateBoostBalanceAndSupply(msg.sender);
-        
+
         boostToken.safeTransferFrom(msg.sender, address(this), booster);
-        
+
         IERC20Burnable burnableBoostToken = IERC20Burnable(address(boostToken));
         // if governance not set, burn all
         if (governance == address(0)) {
@@ -763,7 +826,7 @@ contract BoostRewardsPool is LPTokenWrapper, Ownable {
         uint256 burnAmount = booster.div(2);
         burnableBoostToken.burn(burnAmount);
         booster = booster.sub(burnAmount);
-        
+
         // swap to stablecoin, transferred to governance
         address[] memory routeDetails = new address[](3);
         routeDetails[0] = address(boostToken);
@@ -778,32 +841,27 @@ contract BoostRewardsPool is LPTokenWrapper, Ownable {
         );
     }
 
-    function notifyRewardAmount(uint256 reward)
-        external
-        onlyOwner
-        updateReward(address(0))
-    {
+    function notifyRewardAmount(uint256 reward) external onlyOwner updateReward(address(0)) {
         rewardRate = reward.div(duration);
         lastUpdateTime = starttime;
         periodFinish = starttime.add(duration);
         emit RewardAdded(reward);
     }
-    
-    function setGovernance(address _governance)
-        external
-    {
+
+    function setGovernance(address _governance) external {
         require(msg.sender == governanceSetter, "only setter");
         governance = _governance;
         stablecoin = IGovernance(governance).getStablecoin();
         governanceSetter = address(0);
     }
-    
+
     function updateBoostBalanceAndSupply(address user) internal {
-         // subtract existing balance from boostedSupply
+        // subtract existing balance from boostedSupply
         boostedTotalSupply = boostedTotalSupply.sub(boostedBalances[user]);
         // calculate and update new boosted balance (user's balance has been updated by parent method)
         // each booster adds 5% to stake amount
-        uint256 newBoostBalance = balanceOf(user).mul(numBoostersBought[user].mul(5).add(100)).div(100);
+        uint256 newBoostBalance =
+            balanceOf(user).mul(numBoostersBought[user].mul(5).add(100)).div(100);
         boostedBalances[user] = newBoostBalance;
         // update boostedSupply
         boostedTotalSupply = boostedTotalSupply.add(newBoostBalance);
