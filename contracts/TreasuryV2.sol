@@ -1,25 +1,25 @@
 //SPDX-License-Identifier: MIT
 /*
-* MIT License
-* ===========
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-*/
+ * MIT License
+ * ===========
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ */
 
 pragma solidity 0.5.17;
 
@@ -31,7 +31,6 @@ import "./IERC20Burnable.sol";
 import "./ITreasury.sol";
 import "./IGov.sol";
 import "./ISwapRouter.sol";
-
 
 contract TreasuryV2 is Ownable, ITreasury {
     using SafeMath for uint256;
@@ -52,8 +51,12 @@ contract TreasuryV2 is Ownable, ITreasury {
     uint256 public fundPercentage = 500; // 5%
     uint256 public burnPercentage = 2500; // 25%
 
-
-    constructor(SwapRouter _swapRouter, IERC20 _defaultToken, IERC20 _boostToken, address _ecoFund) public {
+    constructor(
+        SwapRouter _swapRouter,
+        IERC20 _defaultToken,
+        IERC20 _boostToken,
+        address _ecoFund
+    ) public {
         swapRouter = _swapRouter;
         defaultToken = _defaultToken;
         boostToken = _boostToken;
@@ -98,8 +101,9 @@ contract TreasuryV2 is Ownable, ITreasury {
     function deposit(IERC20 token, uint256 amount) external {
         token.safeTransferFrom(msg.sender, address(this), amount);
         // portion allocated to ecoFund
-        ecoFundAmts[address(token)] = ecoFundAmts[address(token)]
-            .add(amount.mul(fundPercentage).div(DENOM));
+        ecoFundAmts[address(token)] = ecoFundAmts[address(token)].add(
+            amount.mul(fundPercentage).div(DENOM)
+        );
     }
 
     // only default token withdrawals allowed
@@ -109,39 +113,53 @@ contract TreasuryV2 is Ownable, ITreasury {
         defaultToken.safeTransfer(withdrawAddress, amount);
     }
 
-    function convertToDefaultToken(address[] calldata routeDetails, uint256 amount) external srcTokenCheck(routeDetails[0]) {
-        require(routeDetails[routeDetails.length - 1] == address(defaultToken), "dest not defaultToken");
+    function convertToDefaultToken(address[] calldata routeDetails, uint256 amount)
+        external
+        srcTokenCheck(routeDetails[0])
+    {
+        require(
+            routeDetails[routeDetails.length - 1] == address(defaultToken),
+            "dest not defaultToken"
+        );
         IERC20 srcToken = IERC20(routeDetails[0]);
         require(balanceOf(srcToken) >= amount, "insufficient funds");
         if (srcToken.allowance(address(this), address(swapRouter)) <= amount) {
             srcToken.safeApprove(address(swapRouter), 0);
             srcToken.safeApprove(address(swapRouter), uint256(-1));
         }
-        uint256[] memory returnedAmts = swapRouter.swapExactTokensForTokens(
-            amount,
-            0,
-            routeDetails,
-            address(this),
-            block.timestamp + 100
-        );
+        uint256[] memory returnedAmts =
+            swapRouter.swapExactTokensForTokens(
+                amount,
+                0,
+                routeDetails,
+                address(this),
+                block.timestamp + 100
+            );
         require(returnedAmts.length > 0, "empty return array");
     }
 
-    function convertToBoostToken(address[] calldata routeDetails, uint256 amount) external srcTokenCheck(routeDetails[0]) {
-        require(routeDetails[routeDetails.length - 1] == address(boostToken), "dest not boostToken");
+    function convertToBoostToken(address[] calldata routeDetails, uint256 amount)
+        external
+        srcTokenCheck(routeDetails[0])
+    {
+        require(
+            routeDetails[routeDetails.length - 1] == address(boostToken),
+            "dest not boostToken"
+        );
         IERC20 srcToken = IERC20(routeDetails[0]);
         require(balanceOf(srcToken) >= amount, "insufficient funds");
         if (srcToken.allowance(address(this), address(swapRouter)) <= amount) {
             srcToken.safeApprove(address(swapRouter), 0);
             srcToken.safeApprove(address(swapRouter), uint256(-1));
         }
-        uint256[] memory returnedAmts = swapRouter.swapExactTokensForTokens(
-            amount,
-            0,
-            routeDetails,
-            address(this),
-            block.timestamp + 100
-        );
+        uint256[] memory returnedAmts =
+            swapRouter.swapExactTokensForTokens(
+                amount,
+                0,
+                routeDetails,
+                address(this),
+                block.timestamp + 100
+            );
         require(returnedAmts.length > 0, "empty return array");
     }
 

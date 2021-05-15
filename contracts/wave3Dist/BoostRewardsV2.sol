@@ -1,25 +1,25 @@
 //SPDX-License-Identifier: MIT
 /*
-* MIT License
-* ===========
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-*/
+ * MIT License
+ * ===========
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ */
 
 pragma solidity 0.5.17;
 
@@ -31,13 +31,12 @@ import "../ITreasury.sol";
 import "../ISwapRouter.sol";
 import "../LPTokenWrapper.sol";
 
-
 contract BoostRewardsV2 is LPTokenWrapper, Ownable {
     IERC20 public boostToken;
     ITreasury public treasury;
     SwapRouter public swapRouter;
     IERC20 public stablecoin;
-    
+
     uint256 public tokenCapAmount;
     uint256 public starttime;
     uint256 public duration;
@@ -47,7 +46,7 @@ contract BoostRewardsV2 is LPTokenWrapper, Ownable {
     uint256 public rewardPerTokenStored;
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
-    
+
     // booster variables
     // variables to keep track of totalSupply and balances (after accounting for multiplier)
     uint256 public boostedTotalSupply;
@@ -64,7 +63,7 @@ contract BoostRewardsV2 is LPTokenWrapper, Ownable {
     event RewardPaid(address indexed user, uint256 reward);
 
     modifier checkStart() {
-        require(block.timestamp >= starttime,"not start");
+        require(block.timestamp >= starttime, "not start");
         _;
     }
 
@@ -98,7 +97,7 @@ contract BoostRewardsV2 is LPTokenWrapper, Ownable {
         boostToken.safeApprove(address(_swapRouter), uint256(-1));
         stablecoin.safeApprove(address(treasury), uint256(-1));
     }
-    
+
     function lastTimeRewardApplicable() public view returns (uint256) {
         return Math.min(block.timestamp, periodFinish);
     }
@@ -109,11 +108,9 @@ contract BoostRewardsV2 is LPTokenWrapper, Ownable {
         }
         return
             rewardPerTokenStored.add(
-                lastTimeRewardApplicable()
-                    .sub(lastUpdateTime)
-                    .mul(rewardRate)
-                    .mul(1e18)
-                    .div(boostedTotalSupply)
+                lastTimeRewardApplicable().sub(lastUpdateTime).mul(rewardRate).mul(1e18).div(
+                    boostedTotalSupply
+                )
             );
     }
 
@@ -126,9 +123,11 @@ contract BoostRewardsV2 is LPTokenWrapper, Ownable {
     }
 
     function getBoosterPrice(address user)
-        public view returns (uint256 boosterPrice, uint256 newBoostBalance)
+        public
+        view
+        returns (uint256 boosterPrice, uint256 newBoostBalance)
     {
-        if (boostedTotalSupply == 0) return (0,0);
+        if (boostedTotalSupply == 0) return (0, 0);
 
         // 5% increase for each previously user-purchased booster
         uint256 boostersBought = numBoostersBought[user];
@@ -145,18 +144,20 @@ contract BoostRewardsV2 is LPTokenWrapper, Ownable {
         }
 
         // 2.5% decrease for every 2 hour interval since last global boost purchase
-        boosterPrice = pow(boosterPrice, 975, 1000, (block.timestamp.sub(lastBoostPurchase)).div(2 hours));
+        boosterPrice = pow(
+            boosterPrice,
+            975,
+            1000,
+            (block.timestamp.sub(lastBoostPurchase)).div(2 hours)
+        );
 
         // adjust price based on expected increase in boost supply
         // boostersBought has been incremented by 1 already
-        newBoostBalance = balanceOf(user)
-            .mul(boostersBought.mul(5).add(100))
-            .div(100);
+        newBoostBalance = balanceOf(user).mul(boostersBought.mul(5).add(100)).div(100);
         uint256 boostBalanceIncrease = newBoostBalance.sub(boostedBalances[user]);
-        boosterPrice = boosterPrice
-            .mul(boostBalanceIncrease)
-            .mul(scaleFactor)
-            .div(boostedTotalSupply);
+        boosterPrice = boosterPrice.mul(boostBalanceIncrease).mul(scaleFactor).div(
+            boostedTotalSupply
+        );
     }
 
     // stake visibility is public as overriding LPTokenWrapper's stake() function
@@ -183,7 +184,7 @@ contract BoostRewardsV2 is LPTokenWrapper, Ownable {
     function withdraw(uint256 amount) public updateReward(msg.sender) checkStart {
         require(amount > 0, "Cannot withdraw 0");
         super.withdraw(amount);
-        
+
         // reset boosts :(
         numBoostersBought[msg.sender] = 0;
 
@@ -191,12 +192,8 @@ contract BoostRewardsV2 is LPTokenWrapper, Ownable {
         updateBoostBalanceAndSupply(msg.sender, 0);
 
         // in case _getReward function fails, continue
-        (bool success, ) = address(this).call(
-            abi.encodeWithSignature(
-                "_getReward(address)",
-                msg.sender
-            )
-        );
+        (bool success, ) =
+            address(this).call(abi.encodeWithSignature("_getReward(address)", msg.sender));
         // to remove compiler warning
         success;
 
@@ -216,79 +213,74 @@ contract BoostRewardsV2 is LPTokenWrapper, Ownable {
         uint256 _boostThreshold,
         uint256 _boostScaleFactor,
         uint256 _scaleFactor
-    ) external onlyOwner
-    {
+    ) external onlyOwner {
         boostThreshold = _boostThreshold;
         boostScaleFactor = _boostScaleFactor;
         scaleFactor = _scaleFactor;
     }
-    
+
     function boost() external updateReward(msg.sender) checkStart {
-        require(
-            block.timestamp > nextBoostPurchaseTime[msg.sender],
-            "early boost purchase"
-        );
+        require(block.timestamp > nextBoostPurchaseTime[msg.sender], "early boost purchase");
 
         // save current booster price, since transfer is done last
         // since getBoosterPrice() returns new boost balance, avoid re-calculation
         (uint256 boosterAmount, uint256 newBoostBalance) = getBoosterPrice(msg.sender);
         // user's balance and boostedSupply will be changed in this function
         applyBoost(msg.sender, newBoostBalance);
-        
+
         _getReward(msg.sender);
 
         boostToken.safeTransferFrom(msg.sender, address(this), boosterAmount);
-        
+
         IERC20Burnable burnableBoostToken = IERC20Burnable(address(boostToken));
 
         // burn 25%
         uint256 burnAmount = boosterAmount.div(4);
         burnableBoostToken.burn(burnAmount);
         boosterAmount = boosterAmount.sub(burnAmount);
-        
+
         // swap to stablecoin
         address[] memory routeDetails = new address[](3);
         routeDetails[0] = address(boostToken);
         routeDetails[1] = swapRouter.WETH();
         routeDetails[2] = address(stablecoin);
-        uint[] memory amounts = swapRouter.swapExactTokensForTokens(
-            boosterAmount,
-            0,
-            routeDetails,
-            address(this),
-            block.timestamp + 100
-        );
+        uint256[] memory amounts =
+            swapRouter.swapExactTokensForTokens(
+                boosterAmount,
+                0,
+                routeDetails,
+                address(this),
+                block.timestamp + 100
+            );
 
         // transfer to treasury
         // index 2 = final output amt
         treasury.deposit(stablecoin, amounts[2]);
     }
 
-    function notifyRewardAmount(uint256 reward)
-        external
-        onlyOwner
-        updateReward(address(0))
-    {
+    function notifyRewardAmount(uint256 reward) external onlyOwner updateReward(address(0)) {
         rewardRate = reward.div(duration);
         lastUpdateTime = starttime;
         periodFinish = starttime.add(duration);
         emit RewardAdded(reward);
     }
-    
+
     function updateBoostBalanceAndSupply(address user, uint256 newBoostBalance) internal {
         // subtract existing balance from boostedSupply
         boostedTotalSupply = boostedTotalSupply.sub(boostedBalances[user]);
-    
+
         // when applying boosts,
         // newBoostBalance has already been calculated in getBoosterPrice()
         if (newBoostBalance == 0) {
             // each booster adds 5% to current stake amount
-            newBoostBalance = balanceOf(user).mul(numBoostersBought[user].mul(5).add(100)).div(100);
+            newBoostBalance = balanceOf(user).mul(numBoostersBought[user].mul(5).add(100)).div(
+                100
+            );
         }
 
         // update user's boosted balance
         boostedBalances[user] = newBoostBalance;
-    
+
         // update boostedSupply
         boostedTotalSupply = boostedTotalSupply.add(newBoostBalance);
     }
@@ -298,7 +290,7 @@ contract BoostRewardsV2 is LPTokenWrapper, Ownable {
         numBoostersBought[user] = numBoostersBought[user].add(1);
 
         updateBoostBalanceAndSupply(user, newBoostBalance);
-        
+
         // increase next purchase eligibility by an hour
         nextBoostPurchaseTime[user] = block.timestamp.add(3600);
 
@@ -317,23 +309,24 @@ contract BoostRewardsV2 is LPTokenWrapper, Ownable {
         }
     }
 
-   /// Imported from: https://forum.openzeppelin.com/t/does-safemath-library-need-a-safe-power-function/871/7
-   /// Modified so that it takes in 3 arguments for base
-   /// @return a * (b / c)^exponent 
-   function pow(uint256 a, uint256 b, uint256 c, uint256 exponent) internal pure returns (uint256) {
+    /// Imported from: https://forum.openzeppelin.com/t/does-safemath-library-need-a-safe-power-function/871/7
+    /// Modified so that it takes in 3 arguments for base
+    /// @return a * (b / c)^exponent
+    function pow(
+        uint256 a,
+        uint256 b,
+        uint256 c,
+        uint256 exponent
+    ) internal pure returns (uint256) {
         if (exponent == 0) {
             return a;
-        }
-        else if (exponent == 1) {
+        } else if (exponent == 1) {
             return a.mul(b).div(c);
-        }
-        else if (a == 0 && exponent != 0) {
+        } else if (a == 0 && exponent != 0) {
             return 0;
-        }
-        else {
+        } else {
             uint256 z = a.mul(b).div(c);
-            for (uint256 i = 1; i < exponent; i++)
-                z = z.mul(b).div(c);
+            for (uint256 i = 1; i < exponent; i++) z = z.mul(b).div(c);
             return z;
         }
     }

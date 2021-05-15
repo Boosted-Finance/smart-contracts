@@ -1,25 +1,25 @@
 //SPDX-License-Identifier: MIT
 /*
-* MIT License
-* ===========
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-*/
+ * MIT License
+ * ===========
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ */
 
 pragma solidity 0.5.17;
 
@@ -29,7 +29,6 @@ import "../zeppelin/Ownable.sol";
 import "../IERC20.sol";
 import "../ITreasury.sol";
 import "../ISwapRouter.sol";
-
 
 contract Treasury is Ownable, ITreasury {
     using SafeMath for uint256;
@@ -47,9 +46,12 @@ contract Treasury is Ownable, ITreasury {
     uint256 public constant MAX_FUND_PERCENTAGE = 1500; // 15%
     uint256 public constant PERCENTAGE_PRECISION = 10000; // 100%
     uint256 public fundPercentage = 500; // 5%
-    
-    
-    constructor(SwapRouter _swapRouter, IERC20 _defaultToken, address _ecoFund) public {
+
+    constructor(
+        SwapRouter _swapRouter,
+        IERC20 _defaultToken,
+        address _ecoFund
+    ) public {
         swapRouter = _swapRouter;
         defaultToken = _defaultToken;
         ecoFund = _ecoFund;
@@ -94,7 +96,10 @@ contract Treasury is Ownable, ITreasury {
 
     function convertToDefaultToken(address[] calldata routeDetails, uint256 amount) external {
         require(routeDetails[0] != address(defaultToken), "src can't be defaultToken");
-        require(routeDetails[routeDetails.length - 1] == address(defaultToken), "dest not defaultToken");
+        require(
+            routeDetails[routeDetails.length - 1] == address(defaultToken),
+            "dest not defaultToken"
+        );
         IERC20 srcToken = IERC20(routeDetails[0]);
         require(balanceOf(srcToken) >= amount, "insufficient funds");
         if (srcToken.allowance(address(this), address(swapRouter)) <= amount) {

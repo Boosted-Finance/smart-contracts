@@ -12,12 +12,18 @@
 
 pragma solidity 0.5.17;
 
+import "../IERC20.sol";
 
 interface IStrategy {
     function getName() external pure returns (string memory);
-    function want() external view returns (address);
-    function withdraw(address) external;
+
+    function want() external view returns (IERC20);
+
+    function emergencyWithdraw(address) external;
+
     function withdraw(uint256) external;
+
     function withdrawAll() external returns (uint256);
+
     function balanceOf() external view returns (uint256);
 }

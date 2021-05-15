@@ -25,23 +25,23 @@ library Math {
      */
     function average(uint256 a, uint256 b) internal pure returns (uint256) {
         // (a + b) / 2 can overflow, so we distribute
-        return (a / 2) + (b / 2) + ((a % 2 + b % 2) / 2);
+        return (a / 2) + (b / 2) + (((a % 2) + (b % 2)) / 2);
     }
 
     /**
-    * Imported from: https://github.com/alianse777/solidity-standard-library/blob/master/Math.sol
-    * @dev Compute square root of x
-    * @return sqrt(x)
-    */
-   function sqrt(uint256 x) internal pure returns (uint256) {
-       uint256 n = x / 2;
-       uint256 lstX = 0;
-       while (n != lstX){
-           lstX = n;
-           n = (n + x/n) / 2; 
-       }
-       return uint256(n);
-   }
+     * Imported from: https://github.com/alianse777/solidity-standard-library/blob/master/Math.sol
+     * @dev Compute square root of x
+     * @return sqrt(x)
+     */
+    function sqrt(uint256 x) internal pure returns (uint256) {
+        uint256 n = x / 2;
+        uint256 lstX = 0;
+        while (n != lstX) {
+            lstX = n;
+            n = (n + x / n) / 2;
+        }
+        return uint256(n);
+    }
 }
 
 /**
@@ -98,7 +98,11 @@ library SafeMath {
      *
      * _Available since v2.4.0._
      */
-    function sub(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+    function sub(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
         require(b <= a, errorMessage);
         uint256 c = a - b;
 
@@ -156,7 +160,11 @@ library SafeMath {
      *
      * _Available since v2.4.0._
      */
-    function div(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+    function div(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
         // Solidity only automatically asserts when dividing by 0
         require(b > 0, errorMessage);
         uint256 c = a / b;
@@ -193,7 +201,11 @@ library SafeMath {
      *
      * _Available since v2.4.0._
      */
-    function mod(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+    function mod(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
         require(b != 0, errorMessage);
         return a % b;
     }
