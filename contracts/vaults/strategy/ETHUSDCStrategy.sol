@@ -205,6 +205,12 @@ contract SushiV2ETHUSDCStrategy is SkeletalStrategy {
         want.safeTransfer(address(vault), amount);
     }
 
+    function withdrawAll() external onlyVault returns (uint256 balance) {
+        _withdraw(poolInfo.balance);
+        balance = want.balanceOf(address(this));
+        want.safeTransfer(address(vault), balance);
+    }
+
     function balanceOf() public view returns (uint256) {
         return poolInfo.balance;
     }
