@@ -36,7 +36,7 @@ contract BoostVault is ERC20, ERC20Detailed {
     using SafeMath for uint256;
 
     IERC20 public want;
-  
+
     mapping(address => uint256) lastActionTimes;
     uint256 public maxUtilisation = 9500;
     uint256 public withdrawalFee = 35; // 0.35%
@@ -44,7 +44,7 @@ contract BoostVault is ERC20, ERC20Detailed {
     uint256 public constant MAX_UTILISATION_ALLOWABLE = 9900; // max 99% utilisation
     uint256 public constant MAX_WITHDRAWAL_FEE = 100; // 1%
     uint256 public constant DENOM = 10000;
-  
+
     address public gov;
     IController public controller;
 
@@ -68,30 +68,31 @@ contract BoostVault is ERC20, ERC20Detailed {
         require(msg.sender == gov, "not gov");
         _;
     }
-  
+
     modifier depositWithdrawTxCheck(address user) {
         require(lastActionTimes[user] != block.timestamp, "deposit-withdraw same time");
-        lastActionTimes[user] = block.timestamp
+        lastActionTimes[user] = block.timestamp;
+        _;
     }
 
     function balance() public view returns (uint256) {
         return want.balanceOf(address(this))
             .add(controller.balanceOf(address(want)));
     }
-  
+
     function setMaxUtilisation(uint256 _maxUtilisation) external onlyGov {
         require(_maxUtilisation <= MAX_UTILISATION_ALLOWABLE, "min 1%");
         maxUtilisation = _maxUtilisation;
     }
-  
+
     function setGovernance(address _gov) external onlyGov {
         gov = _gov;
     }
-  
+
     function setController(IController _controller) external onlyGov {
         controller = _controller;
     }
-    
+
     function setCap(uint256 _cap) external onlyGov {
         cap = _cap;
     }
@@ -105,7 +106,7 @@ contract BoostVault is ERC20, ERC20Detailed {
     function availableFunds() public view returns (uint256) {
         return want.balanceOf(address(this)).mul(maxUtilisation).div(DENOM);
     }
-  
+
     // Strategies will request funds from controller
     // Controller should have checked that
     // 1) Strategy is authorized to pull funds

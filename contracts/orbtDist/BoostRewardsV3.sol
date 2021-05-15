@@ -30,6 +30,7 @@ import "../IERC20Burnable.sol";
 import "../ITreasury.sol";
 import "../ISwapRouter.sol";
 import "../LPTokenWrapper.sol";
+import "../IOrbitStation.sol";
 
 
 contract BoostRewardsV3 is LPTokenWrapper, Ownable {
@@ -38,7 +39,7 @@ contract BoostRewardsV3 is LPTokenWrapper, Ownable {
     IERC20 public stablecoin;
     ITreasury public treasury;
     SwapRouter public swapRouter;
-    IOrbitStation public orbitStation; // TODO - interface for IOrbitStation
+    IOrbitStation public orbitStation;
 
     uint256 public tokenCapAmount;
     uint256 public starttime;
@@ -67,6 +68,7 @@ contract BoostRewardsV3 is LPTokenWrapper, Ownable {
 
     event RewardAdded(uint256 reward);
     event RewardPaid(address indexed user, uint256 reward);
+    event RewardVested(address indexed user, uint256 reward);
 
     modifier checkStart() {
         require(block.timestamp >= starttime,"not start");
@@ -99,7 +101,7 @@ contract BoostRewardsV3 is LPTokenWrapper, Ownable {
         treasury = ITreasury(_treasury);
         orbtToken = treasury.nativeToken();
         swapRouter = _swapRouter;
-        orbitStation = _orbitStation;
+        orbitStation = IOrbitStation(_orbitStation);
         starttime = _starttime;
         lastBoostPurchase = _starttime;
         duration = _duration;
@@ -322,8 +324,8 @@ contract BoostRewardsV3 is LPTokenWrapper, Ownable {
         uint256 reward = earned(user);
         if (reward > 0) {
             rewards[user] = 0;
-            uint256 claimable = rewards.mul(rewardPercentageClaimable).div(1e18); // 0.5 (5e9)
-            uint256 vested = rewards.sub(claimable);
+            uint256 claimable = reward.mul(rewardPercentageClaimable).div(1e18); // 0.5 (5e9)
+            uint256 vested = reward.sub(claimable);
             orbtToken.safeTransfer(user, claimable);
             orbitStation.enterViaPools(user, vested);
             emit RewardPaid(user, claimable);

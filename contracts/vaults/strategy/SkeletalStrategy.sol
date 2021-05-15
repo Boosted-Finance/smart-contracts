@@ -98,9 +98,9 @@ contract SkeletalStrategy is IStrategy {
         want.safeTransfer(address(controller.vault(address(want))), amount);
     }
 
-    function withdrawAll() external returns (uint256 balance) onlyController {
+    function withdrawAll() external onlyController returns (uint256 balance)  {
         // TODO: process the withdrawal
-        
+
         // exclude collected strategist fee
         balance = want.balanceOf(address(this)).sub(strategistCollectedFee);
         // send funds to vault
@@ -115,7 +115,7 @@ contract SkeletalStrategy is IStrategy {
         uint256 hurdleAmount;
         uint256 harvestPercentage;
         uint256 epochTime;
-        (vaultRewardPercentage, hurdleAmount, harvestPercentage) = 
+        (vaultRewardPercentage, hurdleAmount, harvestPercentage) =
             controller.getHarvestInfo(address(this), msg.sender);
 
         // check if harvest amount has to be reset
@@ -137,7 +137,7 @@ contract SkeletalStrategy is IStrategy {
             fee = remainingWantAmount.mul(PERFORMANCE_FEE).div(DENOM);
             strategistCollectedFee = strategistCollectedFee.add(fee);
         }
-        
+
         // do the subtraction of harvester and strategist fees
         remainingWantAmount = remainingWantAmount.sub(harvestFee).sub(fee);
 

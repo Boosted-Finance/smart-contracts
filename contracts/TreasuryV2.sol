@@ -51,8 +51,8 @@ contract TreasuryV2 is Ownable, ITreasury {
     uint256 public constant DENOM = 10000; // 100%
     uint256 public fundPercentage = 500; // 5%
     uint256 public burnPercentage = 2500; // 25%
-    
-    
+
+
     constructor(SwapRouter _swapRouter, IERC20 _defaultToken, IERC20 _boostToken, address _ecoFund) public {
         swapRouter = _swapRouter;
         defaultToken = _defaultToken;
@@ -117,7 +117,7 @@ contract TreasuryV2 is Ownable, ITreasury {
             srcToken.safeApprove(address(swapRouter), 0);
             srcToken.safeApprove(address(swapRouter), uint256(-1));
         }
-        uint256 returnedAmts = swapRouter.swapExactTokensForTokens(
+        uint256[] memory returnedAmts = swapRouter.swapExactTokensForTokens(
             amount,
             0,
             routeDetails,
@@ -135,7 +135,7 @@ contract TreasuryV2 is Ownable, ITreasury {
             srcToken.safeApprove(address(swapRouter), 0);
             srcToken.safeApprove(address(swapRouter), uint256(-1));
         }
-        uint256 returnedAmts = swapRouter.swapExactTokensForTokens(
+        uint256[] memory returnedAmts = swapRouter.swapExactTokensForTokens(
             amount,
             0,
             routeDetails,

@@ -41,7 +41,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     IERC20 public want;
     IController public controller;
     address public gov;
-    
+
     EpochRewards public previousEpoch;
     EpochRewards public currentEpoch;
     mapping(address => uint256) public previousEpochUserRewardPerTokenPaid;
@@ -52,7 +52,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     uint256 public constant EPOCH_DURATION = 1 weeks;
     uint256 public currentEpochTime;
     uint256 public unclaimedRewards;
-    
+
     // booster variables
     // variables to keep track of totalSupply and balances (after accounting for multiplier)
     uint256 public boostedTotalSupply;
@@ -104,13 +104,14 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
                 rewardsAvailable: 0,
                 rewardsClaimed: 0,
                 rewardPerToken: 0
-            }); 
+            });
         }
         _;
     }
 
     modifier stakeWithdrawTxCheck(address user) {
         require(lastActionTime[user] != block.timestamp, "stake-withdraw same time");
+        _;
     }
 
     function earned(address user) external view returns (uint256) {
@@ -122,7 +123,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     function setGovernance(address _gov) external onlyGov updateEpochRewards {
         gov = _gov;
     }
-  
+
     function setController(IController _controller) external onlyGov updateEpochRewards {
         controller = _controller;
     }
@@ -143,7 +144,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         boostToken.safeApprove(address(controller.treasury()), boosterAmount);
         controller.treasury().deposit(boostToken, boosterAmount);
     }
-    
+
     function boost() external updateEpochRewards {
         require(
             block.timestamp > nextBoostPurchaseTime[msg.sender],
@@ -156,7 +157,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         (uint256 boosterAmount, uint256 newBoostBalance) = getBoosterPrice(msg.sender);
         // user's balance and boostedSupply will be changed in this function
         applyBoost(msg.sender, newBoostBalance);
-        
+
         boostToken.safeTransferFrom(msg.sender, address(this), boosterAmount);
         // increase hurdle rate
         controller.increaseHurdleRate(address(want));
@@ -183,7 +184,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         currentEpoch.rewardPerToken = currentEpoch.rewardPerToken.add(
             (boostedTotalSupply == 0) ?
             rewardAmountForDist :
-            rewardAmountForDist.mul(PRECISION).div(boostedTotalSupply) 
+            rewardAmountForDist.mul(PRECISION).div(boostedTotalSupply)
         );
         want.safeApprove(address(controller.treasury()), treasuryAmount);
         controller.treasury().deposit(want, treasuryAmount);
@@ -229,7 +230,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         // previous boosters do not affect new amounts
         boostedBalances[msg.sender] = boostedBalances[msg.sender].add(amount);
         boostedTotalSupply = boostedTotalSupply.add(amount);
-        
+
         // transfer token last, to follow CEI pattern
         stakeToken.safeTransferFrom(msg.sender, address(this), amount);
     }
@@ -238,7 +239,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         require(amount > 0, "Cannot withdraw 0");
         updateClaimUserRewardAndBooster(msg.sender);
         super.withdraw(amount);
-        
+
         // update boosted balance and supply
         updateBoostBalanceAndSupply(msg.sender, 0);
         stakeToken.safeTransfer(msg.sender, amount);
@@ -259,11 +260,11 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
     function exit() public updateEpochRewards {
         withdraw(balanceOf(msg.sender));
     }
-    
+
     function updateBoostBalanceAndSupply(address user, uint256 newBoostBalance) internal {
         // subtract existing balance from boostedSupply
         boostedTotalSupply = boostedTotalSupply.sub(boostedBalances[user]);
-    
+
         // when applying boosts,
         // newBoostBalance has already been calculated in getBoosterPrice()
         if (newBoostBalance == 0) {
@@ -273,7 +274,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
 
         // update user's boosted balance
         boostedBalances[user] = newBoostBalance;
-    
+
         // update boostedSupply
         boostedTotalSupply = boostedTotalSupply.add(newBoostBalance);
     }
@@ -298,7 +299,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         // update user's claimable amount for current epoch
         currentEpochRewardsClaimable[user] = _earned(user, true);
         currentEpochUserRewardPerTokenPaid[user] = currentEpoch.rewardPerToken;
-        
+
         // get reward claimable for previous epoch
         previousEpoch.rewardsClaimed = previousEpoch.rewardsClaimed.add(previousEpochRewardsClaimable[user]);
         uint256 reward = previousEpochRewardsClaimable[user];
@@ -324,7 +325,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         numBoostersBought[user] = numBoostersBought[user].add(1);
 
         updateBoostBalanceAndSupply(user, newBoostBalance);
-        
+
         // increase next purchase eligibility by an hour
         nextBoostPurchaseTime[user] = block.timestamp.add(3600);
 
@@ -338,7 +339,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
         uint256 rewardPerToken;
         uint256 userRewardPerTokenPaid;
         uint256 rewardsClaimable;
-        
+
         if (isCurrentEpoch) {
             rewardPerToken = currentEpoch.rewardPerToken;
             userRewardPerTokenPaid = currentEpochUserRewardPerTokenPaid[account];
@@ -357,7 +358,7 @@ contract BoostVaultRewards is LPTokenWrapper, IVaultRewards {
 
    /// Imported from: https://forum.openzeppelin.com/t/does-safemath-library-need-a-safe-power-function/871/7
    /// Modified so that it takes in 3 arguments for base
-   /// @return a * (b / c)^exponent 
+   /// @return a * (b / c)^exponent
    function pow(uint256 a, uint256 b, uint256 c, uint256 exponent) internal pure returns (uint256) {
         if (exponent == 0) {
             return a;

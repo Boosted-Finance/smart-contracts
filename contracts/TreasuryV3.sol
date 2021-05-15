@@ -77,7 +77,7 @@ contract TreasuryV3 is ITreasury {
     }
 
     function withdrawERC20(uint256 amount, address withdrawAddress, address token) external onlyGov {
-        IERC20(coin).safeTransfer(withdrawAddress, amount);
+        IERC20(token).safeTransfer(withdrawAddress, amount);
     }
 
     function convertToOrbit(address[] calldata routeDetails, uint256 amount) external {
@@ -96,9 +96,8 @@ contract TreasuryV3 is ITreasury {
         );
     }
 
-
     function fundOrbitStation(uint256 amount) external onlyGov {
-        token.safeTransfer(orbitStation , amount);
+        nativeToken.safeTransfer(orbitStation , amount);
     }
 
 }
